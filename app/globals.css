@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #f8f9fb;
+    --bg-surface: #ffffff;
+    --bg-elevated: #f1f3f7;
+    --border-subtle: #e5e7eb;
+    --border-hover: #d1d5db;
+    --text-main: #111827;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3af;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-light: #eff6ff;
+    --income: #059669;
+    --income-bg: #ecfdf5;
+    --expense: #dc2626;
+    --expense-bg: #fef2f2;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+  }
+
+  .dark {
+    --bg-primary: #0b0d11;
+    --bg-surface: #14171f;
+    --bg-elevated: #1d212c;
+    --border-subtle: #242935;
+    --border-hover: #374151;
+    --text-main: #f9fafb;
+    --text-muted: #9ca3af;
+    --text-dim: #6b7280;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-light: #1e293b;
+    --income: #10b981;
+    --income-bg: #064e3b25;
+    --expense: #f87171;
+    --expense-bg: #7f1d1d25;
+    --warning: #fbbf24;
+    --warning-bg: #78350f25;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-main);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Tabular figures utility for financial numbers */
+.num-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}

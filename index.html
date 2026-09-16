@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css"> <!-- External CSS -->
+</head>
+<body>
+
+    <h1>YOUR EXPENSE TRACKER IS READY</h1>
+
+    <div class="container">
+        <button onclick="toggleMode('expenseMode')">Expense Mode</button>
+        <button onclick="toggleMode('monthlyOverviewMode')">Monthly Overview Mode</button>
+
+        <div id="expenseMode" style="display:none;">
+            <h2>Expense Mode</h2>
+            <form id="expenseForm">
+                <label for="memberNames">Member Names:</label>
+                <input type="text" id="memberNames" placeholder="Enter member names" required>
+
+                <label for="totalAmount">Total Amount (INR):</label>
+                <input type="number" id="totalAmount" placeholder="Enter total amount" required>
+
+                <label for="contributions">Contributions:</label>
+                <input type="text" id="contributions" placeholder="Enter contributions" required>
+
+                <button type="button" onclick="calculateExpense()">Calculate</button>
+            </form>
+            <div id="result"></div>
+        </div>
+
+        <div id="monthlyOverviewMode" style="display:none;">
+            <h2>Monthly Overview Mode</h2>
+            <form id="monthlyForm">
+                <label for="date">Select Date:</label>
+                <input type="date" id="date" required>
+
+                <label for="monthlyIncome">Monthly Income (INR):</label>
+                <input type="number" id="monthlyIncome" placeholder="Enter income" required>
+                
+                <label for="monthlySavings">Monthly Savings (INR):</label>
+                <input type="number" id="monthlySavings" placeholder="Enter savings" required>
+                
+                <label for="monthlyExpenses">Monthly Expenses (INR):</label>
+                <input type="number" id="monthlyExpenses" placeholder="Enter expenses" required>
+
+                <button type="button" onclick="saveData()">Save Data</button>
+                <button type="button" onclick="deleteData()">Delete Data</button>
+                <button type="button" onclick="generateMonthlyPDF()">Generate PDF</button>
+            </form>
+            <div id="monthlyResult"></div>
+        </div>
+    </div>
+
+    <script src="script.js" defer></script> <!-- External JavaScript -->
+</body>
+</html>

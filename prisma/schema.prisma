@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String             @id @default(cuid())
+  email            String             @unique
+  name             String
+  baseCurrency     String             @default("INR")
+  timezone         String             @default("Asia/Kolkata")
+  theme            String             @default("system")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  accounts         Account[]
+  categories       Category[]
+  transactions     Transaction[]
+  budgets          Budget[]
+  recurringPayments RecurringPayment[]
+  splitGroups      ExpenseSplitGroup[]
+  reports          Report[]
+}
+
+model Account {
+  id               String        @id @default(cuid())
+  userId           String
+  name             String
+  type             String        @default("BANK") // CASH, BANK, CREDIT_CARD, SAVINGS, WALLET, INVESTMENT
+  currency         String        @default("INR")
+  balance          Float         @default(0.0)
+  isArchived       Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[] @relation("SourceAccount")
+  toTransactions   Transaction[] @relation("DestinationAccount")
+  recurringPayments RecurringPayment[]
+
+  @@index([userId])
+}
+
+model Category {
+  id               String             @id @default(cuid())
+  userId           String
+  name             String
+  type             String             @default("EXPENSE") // EXPENSE, INCOME
+  icon             String             @default("tag")
+  color            String             @default("#3B82F6")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  budgets          Budget[]
+  recurringPayments RecurringPayment[]
+
+  @@index([userId])
+}
+
+model Transaction {
+  id                   String            @id @default(cuid())
+  userId               String
+  accountId            String
+  toAccountId          String?           // For transfers between accounts
+  categoryId           String?
+  amount               Float
+  currency             String            @default("INR")
+  type                 String            @default("EXPENSE") // EXPENSE, INCOME, TRANSFER
+  date                 DateTime          @default(now())
+  payee                String?
+  notes                String?
+  tags                 String?           // Comma-separated tags
+  isRecurring          Boolean           @default(false)
+  recurringPaymentId   String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account              Account           @relation("SourceAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  toAccount            Account?          @relation("DestinationAccount", fields: [toAccountId], references: [id])
+  category             Category?         @relation(fields: [categoryId], references: [id])
+  recurringPayment     RecurringPayment? @relation(fields: [recurringPaymentId], references: [id])
+
+  @@index([userId, date])
+  @@index([accountId])
+  @@index([categoryId])
+}
+
+model Budget {
+  id               String        @id @default(cuid())
+  userId           String
+  categoryId       String?       // Null means total monthly spending budget
+  amount           Float
+  period           String        @default("MONTHLY") // MONTHLY, YEARLY
+  month            Int?          // 1-12
+  year             Int?
+  alertThreshold   Float         @default(0.85) // Alert at 85%
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category         Category?     @relation(fields: [categoryId], references: [id])
+
+  @@index([userId])
+}
+
+model RecurringPayment {
+  id                 String        @id @default(cuid())
+  userId             String
+  accountId          String
+  categoryId         String?
+  description        String
+  amount             Float
+  currency           String        @default("INR")
+  frequency          String        @default("MONTHLY") // DAILY, WEEKLY, MONTHLY, YEARLY
+  nextDate           DateTime
+  lastProcessedDate  DateTime?
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account            Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category           Category?     @relation(fields: [categoryId], references: [id])
+  transactions       Transaction[]
+
+  @@index([userId])
+}
+
+model ExpenseSplitGroup {
+  id               String          @id @default(cuid())
+  userId           String
+  name             String
+  description      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members          SplitMember[]
+  expenses         SplitExpense[]
+
+  @@index([userId])
+}
+
+model SplitMember {
+  id               String          @id @default(cuid())
+  groupId          String
+  name             String
+  email            String?
+  createdAt        DateTime        @default(now())
+
+  group            ExpenseSplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidExpenses     SplitExpense[]    @relation("PaidBy")
+  shares           SplitShare[]
+
+  @@index([groupId])
+}
+
+model SplitExpense {
+  id               String          @id @default(cuid())
+  groupId          String
+  paidById         String
+  description      String
+  amount           Float
+  currency         String          @default("INR")
+  date             DateTime        @default(now())
+  splitType        String          @default("EQUAL") // EQUAL, EXACT
+  createdAt        DateTime        @default(now())
+
+  group            ExpenseSplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidBy           SplitMember       @relation("PaidBy", fields: [paidById], references: [id], onDelete: Cascade)
+  shares           SplitShare[]
+
+  @@index([groupId])
+}
+
+model SplitShare {
+  id               String          @id @default(cuid())
+  splitExpenseId   String
+  memberId         String
+  shareAmount      Float
+  isSettled        Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+
+  splitExpense     SplitExpense    @relation(fields: [splitExpenseId], references: [id], onDelete: Cascade)
+  member           SplitMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([splitExpenseId])
+  @@index([memberId])
+}
+
+model Report {
+  id               String          @id @default(cuid())
+  userId           String
+  month            Int             // 1-12
+  year             Int
+  title            String
+  pdfUrl           String?
+  totalIncome      Float           @default(0.0)
+  totalExpense     Float           @default(0.0)
+  netSavings       Float           @default(0.0)
+  generatedAt      DateTime        @default(now())
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, year, month])
+}

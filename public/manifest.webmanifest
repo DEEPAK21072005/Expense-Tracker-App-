@@ -1,0 +1,70 @@
+{
+  "name": "Expense Tracker Pro - Personal Finance Intelligence",
+  "short_name": "Expense Pro",
+  "description": "Executive-grade personal finance, expense tracking, multi-account ledger, budget forecasting, and debt settlement platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b0d11",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Transactions",
+      "short_name": "Ledger",
+      "description": "View and record financial transactions",
+      "url": "/transactions",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Monthly Budgets",
+      "short_name": "Budgets",
+      "description": "Track budget utilization and category limits",
+      "url": "/budgets",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Split Expenses",
+      "short_name": "Group Split",
+      "description": "Split shared group bills and compute settlements",
+      "url": "/split",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Financial Reports",
+      "short_name": "Reports",
+      "description": "Export executive vector PDF monthly reports",
+      "url": "/reports",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["finance", "productivity", "utilities"]
+}
