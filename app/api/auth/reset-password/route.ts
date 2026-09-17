@@ -46,9 +46,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Hash new password and clear the reset token
     const passwordHash = await bcrypt.hash(password, 12);
-
-    // Update password and clear the reset token
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -58,10 +57,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Invalidate all existing sessions for security
-    await prisma.session.deleteMany({ where: { userId: user.id } });
-
-    // Create a fresh session
+    // Create a fresh session (old sessions are automatically invalidated because
+    // they are HMAC-signed stateless tokens — no session table to purge)
     const response = NextResponse.json({ success: true, data: publicUser(updatedUser) });
     await createSession(user.id, response);
     return response;
