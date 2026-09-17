@@ -1,157 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { calculateSettlements, distributeEqualShares } from '@/lib/money';
-import { SplitGroupInputSchema, SplitExpenseInputSchema } from '@/lib/validation';
+import { calculateSettlements, distributeEqualMinorUnits, fromMinorUnits, parseAmountToMinor } from '@/lib/money';
+import { SplitExpenseInputSchema, SplitGroupInputSchema } from '@/lib/validation';
 
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email: 'user@expensetracker.pro', name: 'Personal User', baseCurrency: 'INR' },
-    });
-  }
-  return user;
-}
+function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
 
 export async function GET() {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const groups = await prisma.expenseSplitGroup.findMany({
-      where: { userId: user.id },
-      include: {
-        members: true,
-        expenses: {
-          include: {
-            paidBy: true,
-            shares: { include: { member: true } },
-          },
-          orderBy: { date: 'desc' },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
+    const groups = await prisma.expenseSplitGroup.findMany({ where: { userId: user.id }, include: { members: true, expenses: { include: { paidBy: true, shares: { include: { member: true } }, }, orderBy: { date: 'desc' } } }, orderBy: { updatedAt: 'desc' } });
+    const data = groups.map((group) => {
+      const expenses = group.expenses.map((expense) => ({ ...expense, amount: fromMinorUnits(expense.amountMinor, expense.currency), shares: expense.shares.map((share) => ({ ...share, shareAmount: fromMinorUnits(share.shareMinor, expense.currency) })) }));
+      const { balances, settlements } = calculateSettlements(group.members.map((member) => ({ id: member.id, name: member.name })), expenses.map((expense) => ({ paidById: expense.paidById, amount: expense.amount, shares: expense.shares.map((share) => ({ memberId: share.memberId, shareAmount: share.shareAmount })) })), user.baseCurrency);
+      const totalMinor = group.expenses.reduce((total, expense) => total + expense.amountMinor, 0);
+      return { ...group, expenses, totalGroupSpent: fromMinorUnits(totalMinor, user.baseCurrency), totalGroupSpentMinor: totalMinor, balances, settlements };
     });
-
-    // Compute settlement matrix for each group
-    const enrichedGroups = groups.map((g) => {
-      const { balances, settlements } = calculateSettlements(
-        g.members.map((m) => ({ id: m.id, name: m.name })),
-        g.expenses.map((e) => ({
-          paidById: e.paidById,
-          amount: e.amount,
-          shares: e.shares.map((s) => ({ memberId: s.memberId, shareAmount: s.shareAmount })),
-        })),
-        'INR'
-      );
-
-      const totalGroupSpent = g.expenses.reduce((sum, e) => sum + e.amount, 0);
-
-      return {
-        ...g,
-        totalGroupSpent,
-        balances,
-        settlements,
-      };
-    });
-
-    return NextResponse.json({ success: true, data: enrichedGroups });
-  } catch (error) {
-    console.error('Split GET error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch split groups' }, { status: 500 });
-  }
+    return NextResponse.json({ success: true, data });
+  } catch (error) { console.error('Split query failed', error); return NextResponse.json({ success: false, error: 'Unable to load split groups' }, { status: 500 }); }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const body = await req.json();
-
-    // Check if this is creating a group or creating an expense inside a group
+    const body = await request.json();
     if (body.action === 'CREATE_GROUP') {
-      const parseResult = SplitGroupInputSchema.safeParse(body);
-      if (!parseResult.success) {
-        return NextResponse.json(
-          { success: false, error: parseResult.error.errors[0]?.message },
-          { status: 400 }
-        );
-      }
-
-      const { name, description, members } = parseResult.data;
-      const group = await prisma.expenseSplitGroup.create({
-        data: {
-          userId: user.id,
-          name,
-          description,
-          members: {
-            create: members.map((mName) => ({ name: mName.trim() })),
-          },
-        },
-        include: { members: true },
-      });
-
+      const parsed = SplitGroupInputSchema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid group' }, { status: 400 });
+      const uniqueMembers = [...new Set(parsed.data.members.map((name) => name.trim()))];
+      if (uniqueMembers.length < 2) return NextResponse.json({ success: false, error: 'Use at least two different member names' }, { status: 400 });
+      const group = await prisma.expenseSplitGroup.create({ data: { userId: user.id, name: parsed.data.name, description: parsed.data.description, members: { create: uniqueMembers.map((name) => ({ name })) } }, include: { members: true } });
       return NextResponse.json({ success: true, data: group }, { status: 201 });
     }
-
-    // Otherwise, creating a split expense
-    const parseResult = SplitExpenseInputSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { success: false, error: parseResult.error.errors[0]?.message },
-        { status: 400 }
-      );
+    const parsed = SplitExpenseInputSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid split expense' }, { status: 400 });
+    const input = parsed.data;
+    if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Splits use your base currency (${user.baseCurrency})` }, { status: 422 });
+    const group = await prisma.expenseSplitGroup.findFirst({ where: { id: input.groupId, userId: user.id }, include: { members: true } });
+    if (!group) return NextResponse.json({ success: false, error: 'Split group not found' }, { status: 404 });
+    const memberIds = new Set(group.members.map((member) => member.id));
+    if (!memberIds.has(input.paidById)) return NextResponse.json({ success: false, error: 'Payer must be a member of this group' }, { status: 422 });
+    const amountMinor = parseAmountToMinor(input.amount, input.currency);
+    let shares: Array<{ memberId: string; shareMinor: number }>;
+    if (input.splitType === 'EQUAL') shares = group.members.map((member, index) => ({ memberId: member.id, shareMinor: distributeEqualMinorUnits(amountMinor, group.members.length)[index] }));
+    else {
+      if (!input.customShares || input.customShares.length !== group.members.length || new Set(input.customShares.map((share) => share.memberId)).size !== group.members.length || input.customShares.some((share) => !memberIds.has(share.memberId))) return NextResponse.json({ success: false, error: 'Custom shares must include each group member exactly once' }, { status: 422 });
+      shares = input.customShares.map((share) => ({ memberId: share.memberId, shareMinor: parseAmountToMinor(share.shareAmount, input.currency) }));
+      if (shares.reduce((total, share) => total + share.shareMinor, 0) !== amountMinor) return NextResponse.json({ success: false, error: 'Custom shares must exactly equal the total amount' }, { status: 422 });
     }
-
-    const { groupId, paidById, description, amount, currency, date, splitType, customShares } =
-      parseResult.data;
-
-    const group = await prisma.expenseSplitGroup.findUnique({
-      where: { id: groupId },
-      include: { members: true },
+    const expense = await prisma.$transaction(async (client) => {
+      const created = await client.splitExpense.create({ data: { groupId: group.id, paidById: input.paidById, description: input.description, amountMinor, currency: input.currency, date: input.date, splitType: input.splitType, shares: { create: shares } }, include: { paidBy: true, shares: { include: { member: true } } } });
+      await client.expenseSplitGroup.update({ where: { id: group.id }, data: { updatedAt: new Date() } }); return created;
     });
-    if (!group) {
-      return NextResponse.json({ success: false, error: 'Group not found' }, { status: 404 });
-    }
-
-    // Determine shares
-    let sharesData: Array<{ memberId: string; shareAmount: number }> = [];
-
-    if (splitType === 'EQUAL') {
-      const shares = distributeEqualShares(amount, group.members.length, currency);
-      sharesData = group.members.map((m, idx) => ({
-        memberId: m.id,
-        shareAmount: shares[idx] || 0,
-      }));
-    } else if (customShares && customShares.length > 0) {
-      sharesData = customShares;
-    }
-
-    const expense = await prisma.splitExpense.create({
-      data: {
-        groupId,
-        paidById,
-        description,
-        amount,
-        currency,
-        date,
-        splitType,
-        shares: {
-          create: sharesData,
-        },
-      },
-      include: {
-        paidBy: true,
-        shares: { include: { member: true } },
-      },
-    });
-
-    // Update group timestamp
-    await prisma.expenseSplitGroup.update({
-      where: { id: groupId },
-      data: { updatedAt: new Date() },
-    });
-
-    return NextResponse.json({ success: true, data: expense }, { status: 201 });
+    return NextResponse.json({ success: true, data: { ...expense, amount: fromMinorUnits(expense.amountMinor, expense.currency), shares: expense.shares.map((share) => ({ ...share, shareAmount: fromMinorUnits(share.shareMinor, expense.currency) })) } }, { status: 201 });
   } catch (error) {
-    console.error('Split POST error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to process split action' }, { status: 500 });
+    if (error instanceof Error && error.message.includes('Unique constraint')) return NextResponse.json({ success: false, error: 'A group with this name already exists' }, { status: 409 });
+    console.error('Split save failed', error); return NextResponse.json({ success: false, error: 'Unable to save this split expense' }, { status: 500 });
   }
 }

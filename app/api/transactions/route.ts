@@ -1,192 +1,114 @@
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { fromMinorUnits, parseAmountToMinor } from '@/lib/money';
 import { TransactionInputSchema } from '@/lib/validation';
-import { addMoney, subtractMoney } from '@/lib/money';
 
-// Helper to get default user
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        email: 'user@expensetracker.pro',
-        name: 'Personal User',
-        baseCurrency: 'INR',
-      },
-    });
+const includes = { category: true, account: true, toAccount: true } satisfies Prisma.TransactionInclude;
+type TransactionWithRelations = Prisma.TransactionGetPayload<{ include: typeof includes }>;
+
+function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
+function serializeTransaction(transaction: TransactionWithRelations) { return { ...transaction, amount: fromMinorUnits(transaction.amountMinor, transaction.currency) }; }
+function dateOnly(value: string, isEnd = false) { return new Date(`${value}T${isEnd ? '23:59:59.999' : '00:00:00.000'}Z`); }
+
+async function validateReferences(userId: string, input: { accountId: string; toAccountId?: string | null; categoryId?: string | null; currency: string; type: string }) {
+  const source = await prisma.account.findFirst({ where: { id: input.accountId, userId, isArchived: false } });
+  if (!source) return { error: 'The selected source account is unavailable' } as const;
+  if (source.currency !== input.currency) return { error: 'Transaction currency must match the source account' } as const;
+  let destination = null;
+  if (input.type === 'TRANSFER') {
+    destination = await prisma.account.findFirst({ where: { id: input.toAccountId ?? '', userId, isArchived: false } });
+    if (!destination || destination.currency !== input.currency) return { error: 'Transfers require an owned destination account with the same currency' } as const;
   }
-  return user;
+  if (input.type !== 'TRANSFER' && input.categoryId) {
+    const category = await prisma.category.findFirst({ where: { id: input.categoryId, userId, type: input.type } });
+    if (!category) return { error: 'The selected category is unavailable' } as const;
+  }
+  return { source, destination } as const;
 }
 
-export async function GET(req: NextRequest) {
+async function applyBalanceChange(client: Prisma.TransactionClient, transaction: { accountId: string; toAccountId: string | null; amountMinor: number; type: string }, direction: 1 | -1) {
+  const sourceDelta = transaction.type === 'INCOME' ? transaction.amountMinor * direction : transaction.type === 'EXPENSE' || transaction.type === 'TRANSFER' ? -transaction.amountMinor * direction : 0;
+  if (sourceDelta) await client.account.update({ where: { id: transaction.accountId }, data: { balanceMinor: { increment: sourceDelta } } });
+  if (transaction.type === 'TRANSFER' && transaction.toAccountId) await client.account.update({ where: { id: transaction.toAccountId }, data: { balanceMinor: { increment: transaction.amountMinor * direction } } });
+}
+
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const { searchParams } = new URL(req.url);
-
-    const search = searchParams.get('search');
-    const categoryId = searchParams.get('categoryId');
-    const accountId = searchParams.get('accountId');
-    const type = searchParams.get('type');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    const where: Record<string, unknown> = { userId: user.id };
-
-    if (search) {
-      where.OR = [
-        { payee: { contains: search } },
-        { notes: { contains: search } },
-        { tags: { contains: search } },
-      ];
-    }
-    if (categoryId) where.categoryId = categoryId;
-    if (accountId) where.accountId = accountId;
-    if (type && ['EXPENSE', 'INCOME', 'TRANSFER'].includes(type)) where.type = type;
-
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) (where.date as Record<string, unknown>).gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        (where.date as Record<string, unknown>).lte = end;
-      }
-    }
-
-    const transactions = await prisma.transaction.findMany({
-      where,
-      include: {
-        category: true,
-        account: true,
-        toAccount: true,
-      },
-      orderBy: { date: 'desc' },
-      take: 200,
-    });
-
-    return NextResponse.json({ success: true, data: transactions });
+    const params = request.nextUrl.searchParams;
+    const where: Prisma.TransactionWhereInput = { userId: user.id };
+    const search = params.get('search')?.trim();
+    if (search) where.OR = [{ payee: { contains: search } }, { notes: { contains: search } }, { tags: { contains: search } }];
+    const categoryId = params.get('categoryId'); if (categoryId) where.categoryId = categoryId;
+    const accountId = params.get('accountId'); if (accountId) where.accountId = accountId;
+    const type = params.get('type'); if (type && ['EXPENSE', 'INCOME', 'TRANSFER'].includes(type)) where.type = type;
+    const startDate = params.get('startDate'); const endDate = params.get('endDate');
+    if (startDate || endDate) where.date = { ...(startDate ? { gte: dateOnly(startDate) } : {}), ...(endDate ? { lte: dateOnly(endDate, true) } : {}) };
+    const transactions = await prisma.transaction.findMany({ where, include: includes, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 200 });
+    return NextResponse.json({ success: true, data: transactions.map(serializeTransaction) });
   } catch (error) {
-    console.error('Transactions GET error:', error);
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+    console.error('Transactions query failed', error);
+    return NextResponse.json({ success: false, error: 'Unable to load transactions' }, { status: 500 });
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const body = await req.json();
-
-    const parseResult = TransactionInputSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { success: false, error: parseResult.error.errors[0]?.message || 'Validation error' },
-        { status: 400 }
-      );
-    }
-
-    const { amount, currency, type, date, accountId, toAccountId, categoryId, payee, notes, tags } =
-      parseResult.data;
-
-    // Check source account
-    const sourceAccount = await prisma.account.findUnique({
-      where: { id: accountId },
+    const parsed = TransactionInputSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid transaction' }, { status: 400 });
+    const input = parsed.data; const amountMinor = parseAmountToMinor(input.amount, input.currency);
+    if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Transactions use your base currency (${user.baseCurrency})` }, { status: 422 });
+    const references = await validateReferences(user.id, input);
+    if ('error' in references) return NextResponse.json({ success: false, error: references.error }, { status: 422 });
+    const transaction = await prisma.$transaction(async (client) => {
+      const created = await client.transaction.create({ data: { userId: user.id, accountId: input.accountId, toAccountId: input.type === 'TRANSFER' ? input.toAccountId : null, categoryId: input.type === 'TRANSFER' ? null : input.categoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
+      await applyBalanceChange(client, created, 1); return created;
     });
-    if (!sourceAccount) {
-      return NextResponse.json({ success: false, error: 'Source account not found' }, { status: 404 });
-    }
-
-    // Atomic transaction: Create record and update account balances
-    const result = await prisma.$transaction(async (tx) => {
-      const transaction = await tx.transaction.create({
-        data: {
-          userId: user.id,
-          accountId,
-          toAccountId: type === 'TRANSFER' ? toAccountId : null,
-          categoryId: type !== 'TRANSFER' ? categoryId : null,
-          amount,
-          currency: currency || user.baseCurrency,
-          type,
-          date,
-          payee: payee || (type === 'TRANSFER' ? 'Account Transfer' : 'Expense'),
-          notes,
-          tags,
-        },
-        include: {
-          category: true,
-          account: true,
-        },
-      });
-
-      // Update balances using money utility
-      if (type === 'INCOME') {
-        const newBalance = addMoney(sourceAccount.balance, amount, sourceAccount.currency);
-        await tx.account.update({
-          where: { id: accountId },
-          data: { balance: newBalance },
-        });
-      } else if (type === 'EXPENSE') {
-        const newBalance = subtractMoney(sourceAccount.balance, amount, sourceAccount.currency);
-        await tx.account.update({
-          where: { id: accountId },
-          data: { balance: newBalance },
-        });
-      } else if (type === 'TRANSFER' && toAccountId) {
-        const toAccount = await tx.account.findUnique({ where: { id: toAccountId } });
-        if (toAccount) {
-          const newSrc = subtractMoney(sourceAccount.balance, amount, sourceAccount.currency);
-          const newDst = addMoney(toAccount.balance, amount, toAccount.currency);
-          await tx.account.update({ where: { id: accountId }, data: { balance: newSrc } });
-          await tx.account.update({ where: { id: toAccountId }, data: { balance: newDst } });
-        }
-      }
-
-      return transaction;
-    });
-
-    return NextResponse.json({ success: true, data: result }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeTransaction(transaction) }, { status: 201 });
   } catch (error) {
-    console.error('Transactions POST error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create transaction' }, { status: 500 });
+    console.error('Transaction creation failed', error);
+    return NextResponse.json({ success: false, error: 'Unable to save this transaction' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'Transaction ID is required' }, { status: 400 });
-    }
-
-    const txRecord = await prisma.transaction.findUnique({
-      where: { id },
-      include: { account: true, toAccount: true },
+    const body = await request.json(); const id = typeof body.id === 'string' ? body.id : '';
+    const parsed = TransactionInputSchema.safeParse(body);
+    if (!id || !parsed.success) return NextResponse.json({ success: false, error: parsed.success ? 'Transaction ID is required' : parsed.error.issues[0]?.message ?? 'Invalid transaction' }, { status: 400 });
+    const current = await prisma.transaction.findFirst({ where: { id, userId: user.id } });
+    if (!current) return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    const input = parsed.data; const amountMinor = parseAmountToMinor(input.amount, input.currency);
+    if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Transactions use your base currency (${user.baseCurrency})` }, { status: 422 });
+    const references = await validateReferences(user.id, input);
+    if ('error' in references) return NextResponse.json({ success: false, error: references.error }, { status: 422 });
+    const updated = await prisma.$transaction(async (client) => {
+      await applyBalanceChange(client, current, -1);
+      const record = await client.transaction.update({ where: { id }, data: { accountId: input.accountId, toAccountId: input.type === 'TRANSFER' ? input.toAccountId : null, categoryId: input.type === 'TRANSFER' ? null : input.categoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
+      await applyBalanceChange(client, record, 1); return record;
     });
-    if (!txRecord) {
-      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
-    }
-
-    // Atomic delete with balance reversal
-    await prisma.$transaction(async (tx) => {
-      if (txRecord.type === 'INCOME') {
-        const reversed = subtractMoney(txRecord.account.balance, txRecord.amount, txRecord.account.currency);
-        await tx.account.update({ where: { id: txRecord.accountId }, data: { balance: reversed } });
-      } else if (txRecord.type === 'EXPENSE') {
-        const reversed = addMoney(txRecord.account.balance, txRecord.amount, txRecord.account.currency);
-        await tx.account.update({ where: { id: txRecord.accountId }, data: { balance: reversed } });
-      } else if (txRecord.type === 'TRANSFER' && txRecord.toAccountId && txRecord.toAccount) {
-        const reversedSrc = addMoney(txRecord.account.balance, txRecord.amount, txRecord.account.currency);
-        const reversedDst = subtractMoney(txRecord.toAccount.balance, txRecord.amount, txRecord.toAccount.currency);
-        await tx.account.update({ where: { id: txRecord.accountId }, data: { balance: reversedSrc } });
-        await tx.account.update({ where: { id: txRecord.toAccountId }, data: { balance: reversedDst } });
-      }
-
-      await tx.transaction.delete({ where: { id } });
-    });
-
-    return NextResponse.json({ success: true, message: 'Transaction deleted successfully' });
+    return NextResponse.json({ success: true, data: serializeTransaction(updated) });
   } catch (error) {
-    console.error('Transactions DELETE error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to delete transaction' }, { status: 500 });
+    console.error('Transaction update failed', error);
+    return NextResponse.json({ success: false, error: 'Unable to update this transaction' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
+  const id = request.nextUrl.searchParams.get('id');
+  if (!id) return NextResponse.json({ success: false, error: 'Transaction ID is required' }, { status: 400 });
+  try {
+    const current = await prisma.transaction.findFirst({ where: { id, userId: user.id } });
+    if (!current) return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    await prisma.$transaction(async (client) => { await applyBalanceChange(client, current, -1); await client.transaction.delete({ where: { id: current.id } }); });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Transaction deletion failed', error);
+    return NextResponse.json({ success: false, error: 'Unable to delete this transaction' }, { status: 500 });
   }
 }

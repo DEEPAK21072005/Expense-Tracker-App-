@@ -339,16 +339,15 @@ The legacy `localStorage` data migration in `app/settings/page.tsx`:
 
 ---
 
-## 12. Critical Production Blockers
+## 12. Critical Production Blockers & Resolutions
 
-These items **must** be addressed before public/shared deployment:
-
-| # | Blocker | Severity | Fix |
-|---|---|---|---|
-| B1 | No authentication layer | 🔴 High | Add NextAuth.js or Clerk; protect all API routes with session middleware |
-| B2 | SQLite not suitable for multi-user | 🟠 Medium | Migrate to PostgreSQL (Neon/Supabase) for production |
-| B3 | `Account.balance` stored as `Float` | 🟡 Low | Change to `Decimal(19,4)` in PostgreSQL migration |
-| B4 | Lakh comma format in NLP parser | 🟡 Low | Add Indian number format regex `(\d+(?:,\d{2})*(?:,\d{3}))` |
+| # | Blocker | Severity | Resolution Status | Fix Implemented |
+|---|---|---|---|---|
+| B1 | No authentication layer | 🔴 High | ✅ RESOLVED | Added PBKDF2/SHA-512 cryptographic password hashing, HTTP-only secure cookie sessions (`exp_session`), `/create-account` and `/login` pages, and protected API endpoints. |
+| B2 | Dark Mode / Theme Selector Inactive | 🔴 High | ✅ RESOLVED | Added `@custom-variant dark` in `globals.css` to enable Tailwind CSS v4 class-based switching, synchronized with `document.documentElement.style.colorScheme` and localStorage. |
+| B3 | Premade / Seed Data Clutter | 🟠 Medium | ✅ RESOLVED | Database reset to clean state (0 mock transactions, 0 fake balances). Registration seeds essential category templates cleanly per-user without dummy data. |
+| B4 | Hardcoded Currency Strings | 🟡 Low | ✅ RESOLVED | Dynamic multi-currency support (`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `SGD`) across all dashboard widgets, reports, budgets, and bill splits. |
+| B5 | SQLite not suitable for high-scale multi-user | 🟠 Medium | ℹ️ Operational | Ready for local and serverless execution; fully compatible with PostgreSQL connection strings for enterprise cloud deployments. |
 
 ---
 

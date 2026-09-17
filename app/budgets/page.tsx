@@ -25,6 +25,7 @@ interface BudgetItem {
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [currency, setCurrency] = useState('INR');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form states
@@ -38,11 +39,13 @@ export default function BudgetsPage() {
 
   const loadBudgets = useCallback(async () => {
     try {
-      const [bRes, cRes] = await Promise.all([
+      const [bRes, cRes, meRes] = await Promise.all([
         fetch(`/api/budgets?month=${month}&year=${year}`).then((r) => r.json()),
         fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
       ]);
       if (bRes.success) setBudgets(bRes.data);
+      if (meRes.success && meRes.data?.baseCurrency) setCurrency(meRes.data.baseCurrency);
       if (cRes.success) {
         const expenseCats = cRes.data.filter((c: { type: string }) => c.type === 'EXPENSE');
         setCategories(expenseCats);
@@ -113,7 +116,7 @@ export default function BudgetsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {budgets.length === 0 ? (
           <div className="col-span-full py-16 text-center text-sm text-neutral-400">
-            No budgets defined for this month. Click "Set Category Budget" to establish spending boundaries.
+            No budgets defined for this month. Click &quot;Set Category Budget&quot; to establish spending boundaries.
           </div>
         ) : (
           budgets.map((b) => (
@@ -145,33 +148,33 @@ export default function BudgetsPage() {
 
               <div>
                 <div className="flex items-baseline justify-between text-xs mb-1.5">
-                  <span className="text-neutral-500">Spent:</span>
-                  <span className="font-semibold text-neutral-900 dark:text-neutral-100 num-tabular">
-                    {formatCurrency(b.spent, 'INR')}{' '}
-                    <span className="font-normal text-neutral-400">/ {formatCurrency(b.limit, 'INR')}</span>
+                  <span className="text-[var(--text-muted)]">Spent:</span>
+                  <span className="font-semibold text-[var(--text-main)] num-tabular">
+                    {formatCurrency(b.spent, currency)}{' '}
+                    <span className="font-normal text-[var(--text-dim)]">/ {formatCurrency(b.limit, currency)}</span>
                   </span>
                 </div>
 
-                <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-elevated)]">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
-                      b.isOverspent ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-emerald-500'
+                      b.isOverspent ? 'bg-[var(--danger)]' : b.isWarning ? 'bg-[var(--warning)]' : 'bg-[var(--income)]'
                     }`}
                     style={{ width: `${Math.min(100, b.percentUsed)}%` }}
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between border-t border-neutral-100 pt-3 text-xs dark:border-neutral-800/80">
-                <span className="text-neutral-500">
+              <div className="flex justify-between border-t border-[var(--border-subtle)] pt-3 text-xs">
+                <span className="text-[var(--text-muted)]">
                   {b.remaining >= 0 ? 'Remaining to spend:' : 'Amount exceeded:'}
                 </span>
                 <span
                   className={`font-semibold num-tabular ${
-                    b.remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                    b.remaining >= 0 ? 'text-[var(--income)]' : 'text-[var(--expense)]'
                   }`}
                 >
-                  {formatCurrency(Math.abs(b.remaining), 'INR')}
+                  {formatCurrency(Math.abs(b.remaining), currency)}
                 </span>
               </div>
             </Card>
@@ -188,13 +191,13 @@ export default function BudgetsPage() {
       >
         <form onSubmit={handleSaveBudget} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5">
               Category
             </label>
             <select
               value={selectedCatId}
               onChange={(e) => setSelectedCatId(e.target.value)}
-              className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-blue-500 focus:outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+              className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
               required
             >
               {categories.map((c) => (
@@ -206,7 +209,7 @@ export default function BudgetsPage() {
           </div>
 
           <Input
-            label="Monthly Limit (INR)"
+            label={`Monthly Limit (${currency})`}
             type="number"
             step="100"
             placeholder="e.g. 10000"

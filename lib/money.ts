@@ -1,10 +1,4 @@
-/**
- * Money and Currency Domain Utilities
- *
- * Enforces integer minor-unit arithmetic to eliminate JavaScript floating-point inaccuracies.
- * All ledger balances, transaction totals, and splits are calculated at minor-unit precision
- * (e.g., 100 paise = ₹1.00, 100 cents = $1.00).
- */
+/** Financial helpers. Persistent values are always integer minor units. */
 
 export interface CurrencyConfig {
   code: string;
@@ -25,200 +19,121 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyConfig> = {
   AUD: { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', decimals: 2, locale: 'en-AU' },
 };
 
-/**
- * Converts a standard decimal currency value to integer minor units (e.g., 12.34 -> 1234).
- */
-export function toMinorUnits(amount: number, currency: string = 'INR'): number {
-  const config = SUPPORTED_CURRENCIES[currency] || SUPPORTED_CURRENCIES.INR;
-  const factor = Math.pow(10, config.decimals);
-  return Math.round(amount * factor);
+export const MAX_MINOR_UNITS = 2_147_483_647;
+
+export function getCurrency(currency = 'INR'): CurrencyConfig {
+  const config = SUPPORTED_CURRENCIES[currency];
+  if (!config) throw new Error('Unsupported currency');
+  return config;
 }
 
-/**
- * Converts integer minor units back to a standard decimal currency number (e.g., 1234 -> 12.34).
- */
-export function fromMinorUnits(minorUnits: number, currency: string = 'INR'): number {
-  const config = SUPPORTED_CURRENCIES[currency] || SUPPORTED_CURRENCIES.INR;
-  const factor = Math.pow(10, config.decimals);
-  return minorUnits / factor;
+/** Parses user input without float rounding. Returns a positive database-safe integer. */
+export function parseAmountToMinor(raw: string | number, currency = 'INR'): number {
+  const { decimals } = getCurrency(currency);
+  const value = typeof raw === 'number' ? String(raw) : raw.trim();
+  if (!/^\d+(?:\.\d+)?$/.test(value)) throw new Error('Enter a valid positive amount');
+  const [whole, fraction = ''] = value.split('.');
+  if (fraction.length > decimals) throw new Error(`Amounts in ${currency} support at most ${decimals} decimal places`);
+  const padded = `${fraction}${'0'.repeat(decimals)}`.slice(0, decimals);
+  const minor = Number(whole) * 10 ** decimals + Number(padded || 0);
+  if (!Number.isSafeInteger(minor) || minor <= 0 || minor > MAX_MINOR_UNITS) {
+    throw new Error('Amount is outside the supported range');
+  }
+  return minor;
 }
 
-/**
- * Precise addition of two currency amounts.
- */
-export function addMoney(a: number, b: number, currency: string = 'INR'): number {
-  const minorA = toMinorUnits(a, currency);
-  const minorB = toMinorUnits(b, currency);
+/** Parses an account opening balance, which may be negative (for example, card debt). */
+export function parseSignedAmountToMinor(raw: string | number, currency = 'INR'): number {
+  const value = typeof raw === 'number' ? String(raw) : raw.trim();
+  if (value === '0' || value === '0.0' || value === '0.00') return 0;
+  const negative = value.startsWith('-');
+  const minor = parseAmountToMinor(negative ? value.slice(1) : value, currency);
+  return negative ? -minor : minor;
+}
+
+export function toMinorUnits(amount: number, currency = 'INR'): number {
+  return parseAmountToMinor(amount, currency);
+}
+
+export function fromMinorUnits(minorUnits: number, currency = 'INR'): number {
+  const { decimals } = getCurrency(currency);
+  return minorUnits / 10 ** decimals;
+}
+
+export function addMinor(a: number, b: number): number {
+  const total = a + b;
+  if (!Number.isSafeInteger(total) || Math.abs(total) > MAX_MINOR_UNITS) throw new Error('Money total is outside the supported range');
+  return total;
+}
+
+export function subtractMinor(a: number, b: number): number {
+  return addMinor(a, -b);
+}
+
+// Display-only decimal helpers retained for client components. Never use these to persist data.
+export function addMoney(a: number, b: number, currency = 'INR'): number {
+  const minorA = Math.round(a * 10 ** getCurrency(currency).decimals);
+  const minorB = Math.round(b * 10 ** getCurrency(currency).decimals);
   return fromMinorUnits(minorA + minorB, currency);
 }
 
-/**
- * Precise subtraction of two currency amounts (a - b).
- */
-export function subtractMoney(a: number, b: number, currency: string = 'INR'): number {
-  const minorA = toMinorUnits(a, currency);
-  const minorB = toMinorUnits(b, currency);
-  return fromMinorUnits(minorA - minorB, currency);
+export function subtractMoney(a: number, b: number, currency = 'INR'): number {
+  return addMoney(a, -b, currency);
 }
 
-/**
- * Precise multiplication of a currency amount by a scalar factor.
- */
-export function multiplyMoney(amount: number, factor: number, currency: string = 'INR'): number {
-  const minor = toMinorUnits(amount, currency);
-  const resultMinor = Math.round(minor * factor);
-  return fromMinorUnits(resultMinor, currency);
+export function multiplyMoney(amount: number, factor: number, currency = 'INR'): number {
+  const minor = Math.round(amount * 10 ** getCurrency(currency).decimals);
+  return fromMinorUnits(Math.round(minor * factor), currency);
 }
 
-/**
- * Distributes a total amount equally among N members down to the last indivisible minor unit.
- * Invariant: The sum of returned share values is GUARANTEED to exactly equal the total amount.
- */
-export function distributeEqualShares(
-  totalAmount: number,
-  memberCount: number,
-  currency: string = 'INR'
-): number[] {
-  if (memberCount <= 0) return [];
+export function distributeEqualMinorUnits(totalMinor: number, memberCount: number): number[] {
+  if (!Number.isInteger(totalMinor) || totalMinor < 0 || memberCount <= 0) return [];
+  const base = Math.floor(totalMinor / memberCount);
+  const remainder = totalMinor % memberCount;
+  return Array.from({ length: memberCount }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
+export function distributeEqualShares(totalAmount: number, memberCount: number, currency = 'INR'): number[] {
   const totalMinor = toMinorUnits(totalAmount, currency);
-  const baseShareMinor = Math.floor(totalMinor / memberCount);
-  const remainderMinor = totalMinor % memberCount;
-
-  const shares: number[] = [];
-  for (let i = 0; i < memberCount; i++) {
-    // Distribute remainder minor units one by one to initial members
-    const shareMinor = baseShareMinor + (i < remainderMinor ? 1 : 0);
-    shares.push(fromMinorUnits(shareMinor, currency));
-  }
-  return shares;
+  return distributeEqualMinorUnits(totalMinor, memberCount).map((minor) => fromMinorUnits(minor, currency));
 }
 
-/**
- * Formats a currency amount into a clean localized string.
- */
 export function formatCurrency(
   amount: number,
-  currency: string = 'INR',
+  currency = 'INR',
   options: { includeDecimals?: boolean; compact?: boolean } = {}
 ): string {
-  const config = SUPPORTED_CURRENCIES[currency] || SUPPORTED_CURRENCIES.INR;
+  const config = getCurrency(currency);
   const decimals = options.includeDecimals === false ? 0 : config.decimals;
-
-  try {
-    return new Intl.NumberFormat(config.locale, {
-      style: 'currency',
-      currency: config.code,
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-      notation: options.compact ? 'compact' : 'standard',
-    }).format(amount);
-  } catch {
-    // Fallback if locale is unsupported
-    return `${config.symbol}${amount.toFixed(decimals)}`;
-  }
+  return new Intl.NumberFormat(config.locale, {
+    style: 'currency', currency: config.code, minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals, notation: options.compact ? 'compact' : 'standard',
+  }).format(amount);
 }
 
-/**
- * Settlement transaction representing who pays whom to clear debt.
- */
-export interface Settlement {
-  fromId: string;
-  fromName: string;
-  toId: string;
-  toName: string;
-  amount: number;
-}
+export interface Settlement { fromId: string; fromName: string; toId: string; toName: string; amount: number }
 
-/**
- * Solves the debt minimization problem across a group of members.
- * Computes net balances (total paid - total share owed) and matches
- * largest debtor with largest creditor iteratively to produce the minimal
- * number of payment transactions.
- */
 export function calculateSettlements(
   members: Array<{ id: string; name: string }>,
-  expenses: Array<{
-    paidById: string;
-    amount: number;
-    shares: Array<{ memberId: string; shareAmount: number }>;
-  }>,
-  currency: string = 'INR'
-): {
-  balances: Record<string, { memberName: string; netBalance: number }>;
-  settlements: Settlement[];
-} {
-  const memberMap = new Map(members.map((m) => [m.id, m.name]));
-  const netMinor: Record<string, number> = {};
-
-  for (const m of members) {
-    netMinor[m.id] = 0;
+  expenses: Array<{ paidById: string; amount: number; shares: Array<{ memberId: string; shareAmount: number }> }>,
+  currency = 'INR'
+): { balances: Record<string, { memberName: string; netBalance: number }>; settlements: Settlement[] } {
+  const names = new Map(members.map((member) => [member.id, member.name]));
+  const balancesMinor: Record<string, number> = Object.fromEntries(members.map((member) => [member.id, 0]));
+  for (const expense of expenses) {
+    balancesMinor[expense.paidById] = addMinor(balancesMinor[expense.paidById] ?? 0, Math.round(expense.amount * 10 ** getCurrency(currency).decimals));
+    for (const share of expense.shares) balancesMinor[share.memberId] = subtractMinor(balancesMinor[share.memberId] ?? 0, Math.round(share.shareAmount * 10 ** getCurrency(currency).decimals));
   }
-
-  // 1. Compute net minor balance for each member: paid (+) vs share (-)
-  for (const exp of expenses) {
-    const paidMinor = toMinorUnits(exp.amount, currency);
-    netMinor[exp.paidById] = (netMinor[exp.paidById] || 0) + paidMinor;
-
-    for (const share of exp.shares) {
-      const shareMinor = toMinorUnits(share.shareAmount, currency);
-      netMinor[share.memberId] = (netMinor[share.memberId] || 0) - shareMinor;
-    }
-  }
-
-  // 2. Separate into debtors (< 0) and creditors (> 0)
-  interface BalanceNode {
-    id: string;
-    name: string;
-    amountMinor: number;
-  }
-
-  const debtors: BalanceNode[] = [];
-  const creditors: BalanceNode[] = [];
-  const balancesResult: Record<string, { memberName: string; netBalance: number }> = {};
-
-  for (const [id, minor] of Object.entries(netMinor)) {
-    const name = memberMap.get(id) || 'Unknown Member';
-    balancesResult[id] = {
-      memberName: name,
-      netBalance: fromMinorUnits(minor, currency),
-    };
-
-    if (minor < -0.5) {
-      debtors.push({ id, name, amountMinor: -minor }); // owes money
-    } else if (minor > 0.5) {
-      creditors.push({ id, name, amountMinor: minor }); // owed money
-    }
-  }
-
-  // 3. Greedy two-pointer debt clearing
+  const debtors = Object.entries(balancesMinor).filter(([, value]) => value < 0).map(([id, value]) => ({ id, amount: -value })).sort((a, b) => b.amount - a.amount);
+  const creditors = Object.entries(balancesMinor).filter(([, value]) => value > 0).map(([id, value]) => ({ id, amount: value })).sort((a, b) => b.amount - a.amount);
   const settlements: Settlement[] = [];
-  let dIdx = 0;
-  let cIdx = 0;
-
-  while (dIdx < debtors.length && cIdx < creditors.length) {
-    const debtor = debtors[dIdx];
-    const creditor = creditors[cIdx];
-    const settleMinor = Math.min(debtor.amountMinor, creditor.amountMinor);
-
-    if (settleMinor > 0) {
-      settlements.push({
-        fromId: debtor.id,
-        fromName: debtor.name,
-        toId: creditor.id,
-        toName: creditor.name,
-        amount: fromMinorUnits(settleMinor, currency),
-      });
-
-      debtor.amountMinor -= settleMinor;
-      creditor.amountMinor -= settleMinor;
-    }
-
-    if (debtor.amountMinor <= 0.5) dIdx++;
-    if (creditor.amountMinor <= 0.5) cIdx++;
+  let debtor = 0; let creditor = 0;
+  while (debtor < debtors.length && creditor < creditors.length) {
+    const amountMinor = Math.min(debtors[debtor].amount, creditors[creditor].amount);
+    settlements.push({ fromId: debtors[debtor].id, fromName: names.get(debtors[debtor].id) ?? 'Unknown', toId: creditors[creditor].id, toName: names.get(creditors[creditor].id) ?? 'Unknown', amount: fromMinorUnits(amountMinor, currency) });
+    debtors[debtor].amount -= amountMinor; creditors[creditor].amount -= amountMinor;
+    if (debtors[debtor].amount === 0) debtor += 1;
+    if (creditors[creditor].amount === 0) creditor += 1;
   }
-
-  return {
-    balances: balancesResult,
-    settlements,
-  };
+  return { balances: Object.fromEntries(Object.entries(balancesMinor).map(([id, value]) => [id, { memberName: names.get(id) ?? 'Unknown', netBalance: fromMinorUnits(value, currency) }])), settlements };
 }

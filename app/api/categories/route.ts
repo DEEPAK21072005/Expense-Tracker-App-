@@ -1,62 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { CategoryInputSchema } from '@/lib/validation';
 
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email: 'user@expensetracker.pro', name: 'Personal User', baseCurrency: 'INR' },
-    });
-  }
-  return user;
-}
+function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
 
 export async function GET() {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const categories = await prisma.category.findMany({
-      where: { userId: user.id },
-      orderBy: { name: 'asc' },
-      include: {
-        _count: { select: { transactions: true } },
-      },
-    });
-
+    const categories = await prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ type: 'asc' }, { name: 'asc' }], include: { _count: { select: { transactions: true } } } });
     return NextResponse.json({ success: true, data: categories });
-  } catch (error) {
-    console.error('Categories GET error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch categories' }, { status: 500 });
-  }
+  } catch (error) { console.error('Categories query failed', error); return NextResponse.json({ success: false, error: 'Unable to load categories' }, { status: 500 }); }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const body = await req.json();
-
-    const parseResult = CategoryInputSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { success: false, error: parseResult.error.errors[0]?.message || 'Validation error' },
-        { status: 400 }
-      );
-    }
-
-    const { name, type, icon, color } = parseResult.data;
-    const category = await prisma.category.create({
-      data: {
-        userId: user.id,
-        name,
-        type,
-        icon,
-        color,
-      },
-    });
-
+    const parsed = CategoryInputSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid category' }, { status: 400 });
+    const category = await prisma.category.create({ data: { userId: user.id, ...parsed.data } });
     return NextResponse.json({ success: true, data: category }, { status: 201 });
   } catch (error) {
-    console.error('Categories POST error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create category' }, { status: 500 });
+    if (error instanceof Error && error.message.includes('Unique constraint')) return NextResponse.json({ success: false, error: 'A category with this name already exists' }, { status: 409 });
+    console.error('Category creation failed', error); return NextResponse.json({ success: false, error: 'Unable to create this category' }, { status: 500 });
   }
 }

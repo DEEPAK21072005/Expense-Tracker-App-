@@ -34,3 +34,5 @@ prisma/*.db-journal
 Thumbs.db
 *.tsbuildinfo
 
+
+.vercel

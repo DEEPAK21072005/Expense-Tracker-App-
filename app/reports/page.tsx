@@ -27,6 +27,7 @@ export default function ReportsPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [currency, setCurrency] = useState('USD');
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,11 +37,17 @@ export default function ReportsPage() {
       const start = new Date(year, month - 1, 1).toISOString();
       const end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
 
-      const res = await fetch(`/api/transactions?startDate=${start}&endDate=${end}`);
-      const json = await res.json();
+      const [txRes, meRes] = await Promise.all([
+        fetch(`/api/transactions?startDate=${start}&endDate=${end}`).then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()).catch(() => null),
+      ]);
 
-      if (json.success) {
-        const txs = json.data as Array<{
+      if (meRes?.success && meRes.data?.baseCurrency) {
+        setCurrency(meRes.data.baseCurrency);
+      }
+
+      if (txRes?.success) {
+        const txs = txRes.data as Array<{
           amount: number;
           currency: string;
           type: string;
@@ -150,7 +157,7 @@ export default function ReportsPage() {
               Monthly Total Income
             </span>
             <p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400 num-tabular">
-              +{formatCurrency(stats.totalIncome, 'INR')}
+              +{formatCurrency(stats.totalIncome, currency)}
             </p>
           </Card>
 
@@ -159,7 +166,7 @@ export default function ReportsPage() {
               Monthly Total Expenses
             </span>
             <p className="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-400 num-tabular">
-              -{formatCurrency(stats.totalExpenses, 'INR')}
+              -{formatCurrency(stats.totalExpenses, currency)}
             </p>
           </Card>
 
@@ -172,7 +179,7 @@ export default function ReportsPage() {
                 stats.netSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
               }`}
             >
-              {formatCurrency(stats.netSavings, 'INR')}
+              {formatCurrency(stats.netSavings, currency)}
             </p>
           </Card>
 
@@ -266,7 +273,7 @@ export default function ReportsPage() {
                 <div className="flex items-center gap-3">
                   <span className="text-neutral-500 num-tabular">{c.percentage.toFixed(1)}%</span>
                   <span className="font-bold text-neutral-900 dark:text-neutral-100 num-tabular">
-                    {formatCurrency(c.total, 'INR')}
+                    {formatCurrency(c.total, currency)}
                   </span>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -20,14 +20,23 @@ export function Modal({
   children,
   maxWidth = 'md',
 }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     };
 
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
+      requestAnimationFrame(() => dialogRef.current?.focus());
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -57,24 +66,28 @@ export function Modal({
 
       {/* Dialog container */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative w-full ${maxWidthClasses[maxWidth]} rounded-3xl border border-neutral-200/80 bg-white p-6 shadow-2xl transition-all duration-200 dark:border-neutral-800 dark:bg-[#14171f]`}
+        aria-describedby={description ? 'modal-description' : undefined}
+        tabIndex={-1}
+        className={`relative w-full ${maxWidthClasses[maxWidth]} rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl text-[var(--text-main)] transition-all duration-200`}
       >
         <div className="flex items-center justify-between pb-4">
           <div>
-            <h2 id="modal-title" className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+            <h2 id="modal-title" className="text-lg font-semibold tracking-tight text-[var(--text-main)]">
               {title}
             </h2>
             {description ? (
-              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{description}</p>
+              <p id="modal-description" className="mt-0.5 text-xs text-[var(--text-muted)]">{description}</p>
             ) : null}
           </div>
           <button
             onClick={onClose}
+            type="button"
             aria-label="Close dialog"
-            className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            className="rounded-full p-1.5 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)] transition-colors"
           >
             <X className="h-4 w-4" />
           </button>

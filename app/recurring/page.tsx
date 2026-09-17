@@ -22,8 +22,9 @@ interface RecurringItem {
 
 export default function RecurringPage() {
   const [subscriptions, setSubscriptions] = useState<RecurringItem[]>([]);
-  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; currency?: string }>>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [currency, setCurrency] = useState('INR');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form states
@@ -37,13 +38,15 @@ export default function RecurringPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [rRes, aRes, cRes] = await Promise.all([
+      const [rRes, aRes, cRes, meRes] = await Promise.all([
         fetch('/api/recurring').then((r) => r.json()),
         fetch('/api/accounts').then((r) => r.json()),
         fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
       ]);
 
       if (rRes.success) setSubscriptions(rRes.data);
+      if (meRes.success && meRes.data?.baseCurrency) setCurrency(meRes.data.baseCurrency);
       if (aRes.success && aRes.data.length > 0) {
         setAccounts(aRes.data);
         setAccountId(aRes.data[0].id);
@@ -79,6 +82,9 @@ export default function RecurringPage() {
     }
 
     setIsLoading(true);
+    const selectedAcc = accounts.find((a) => a.id === accountId);
+    const activeCurrency = selectedAcc?.currency || currency;
+
     try {
       const res = await fetch('/api/recurring', {
         method: 'POST',
@@ -86,7 +92,7 @@ export default function RecurringPage() {
         body: JSON.stringify({
           description: description.trim(),
           amount: parsedAmount,
-          currency: 'INR',
+          currency: activeCurrency,
           frequency,
           nextDate,
           accountId,
@@ -115,7 +121,7 @@ export default function RecurringPage() {
             Subscriptions & Recurring Bills
           </h1>
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-            Track scheduled charges, renewals, and ongoing monthly commitments
+            Track fixed monthly obligations, upcoming utility bills, and active SaaS memberships
           </p>
         </div>
 
@@ -126,19 +132,19 @@ export default function RecurringPage() {
       </div>
 
       {/* Monthly Commitment Banner */}
-      <Card elevated className="border-blue-100 bg-blue-50/40 dark:border-blue-900/30 dark:bg-blue-950/20">
+      <Card elevated className="border-[var(--border-subtle)] bg-[var(--accent-light)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-blue-600 p-2.5 text-white shadow-sm">
+            <div className="rounded-2xl bg-[var(--accent)] p-2.5 text-white shadow-xs">
               <CalendarClock className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-blue-800 dark:text-blue-300">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
                 Monthly Recurring Commitment
               </span>
-              <p className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 num-tabular">
-                {formatCurrency(monthlyTotal, 'INR')}
-                <span className="text-xs font-normal text-neutral-500 ml-1.5">/ month</span>
+              <p className="text-2xl font-bold text-[var(--text-main)] num-tabular">
+                {formatCurrency(monthlyTotal, currency)}
+                <span className="text-xs font-normal text-[var(--text-muted)] ml-1.5">/ month</span>
               </p>
             </div>
           </div>
@@ -151,7 +157,7 @@ export default function RecurringPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {subscriptions.length === 0 ? (
           <div className="col-span-full py-16 text-center text-sm text-neutral-400">
-            No recurring subscriptions tracked yet. Click "Add Subscription" to register your monthly bills.
+            No recurring subscriptions tracked yet. Click &quot;Add Subscription&quot; to register your monthly bills.
           </div>
         ) : (
           subscriptions.map((s) => {

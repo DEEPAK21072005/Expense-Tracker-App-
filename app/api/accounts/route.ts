@@ -1,62 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { fromMinorUnits } from '@/lib/money';
 import { AccountInputSchema } from '@/lib/validation';
 
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email: 'user@expensetracker.pro', name: 'Personal User', baseCurrency: 'INR' },
-    });
-  }
-  return user;
-}
+function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
+function serialize(account: { balanceMinor: number; currency: string }) { return { ...account, balance: fromMinorUnits(account.balanceMinor, account.currency) }; }
 
 export async function GET() {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const accounts = await prisma.account.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        _count: { select: { transactions: true } },
-      },
-    });
+    const accounts = await prisma.account.findMany({ where: { userId: user.id }, orderBy: [{ isArchived: 'asc' }, { createdAt: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    return NextResponse.json({ success: true, data: accounts.map(serialize) });
+  } catch (error) { console.error('Accounts query failed', error); return NextResponse.json({ success: false, error: 'Unable to load accounts' }, { status: 500 }); }
+}
 
-    return NextResponse.json({ success: true, data: accounts });
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
+  try {
+    const parsed = AccountInputSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid account' }, { status: 400 });
+    const input = parsed.data as typeof parsed.data & { balanceMinor: number };
+    if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Accounts use your base currency (${user.baseCurrency})` }, { status: 422 });
+    const account = await prisma.account.create({ data: { userId: user.id, name: input.name, type: input.type, currency: input.currency, balanceMinor: input.balanceMinor } });
+    return NextResponse.json({ success: true, data: serialize(account) }, { status: 201 });
   } catch (error) {
-    console.error('Accounts GET error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch accounts' }, { status: 500 });
+    if (error instanceof Error && error.message.includes('Unique constraint')) return NextResponse.json({ success: false, error: 'An account with this name already exists' }, { status: 409 });
+    console.error('Account creation failed', error); return NextResponse.json({ success: false, error: 'Unable to create this account' }, { status: 500 });
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const body = await req.json();
-
-    const parseResult = AccountInputSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { success: false, error: parseResult.error.errors[0]?.message || 'Validation error' },
-        { status: 400 }
-      );
-    }
-
-    const { name, type, currency, balance } = parseResult.data;
-    const account = await prisma.account.create({
-      data: {
-        userId: user.id,
-        name,
-        type,
-        currency: currency || user.baseCurrency,
-        balance,
-      },
-    });
-
-    return NextResponse.json({ success: true, data: account }, { status: 201 });
-  } catch (error) {
-    console.error('Accounts POST error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create account' }, { status: 500 });
-  }
+    const { id, isArchived } = await request.json();
+    if (typeof id !== 'string' || typeof isArchived !== 'boolean') return NextResponse.json({ success: false, error: 'Invalid account update' }, { status: 400 });
+    const account = await prisma.account.updateMany({ where: { id, userId: user.id }, data: { isArchived } });
+    if (!account.count) return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (error) { console.error('Account update failed', error); return NextResponse.json({ success: false, error: 'Unable to update this account' }, { status: 500 }); }
 }

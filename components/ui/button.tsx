@@ -14,12 +14,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'inline-flex items-center justify-center font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none rounded-xl active:scale-[0.98] select-none cursor-pointer';
 
     const variants = {
-      primary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20',
-      secondary: 'bg-neutral-100 hover:bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-100',
-      outline: 'border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-850 text-neutral-800 dark:text-neutral-200',
-      danger: 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/20',
-      ghost: 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300',
-      subtle: 'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 dark:text-blue-300',
+      primary: 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-xs',
+      secondary: 'bg-[var(--bg-elevated)] hover:bg-[var(--border-hover)]/30 text-[var(--text-main)]',
+      outline: 'border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] text-[var(--text-main)]',
+      danger: 'bg-[var(--danger)] hover:opacity-90 text-white shadow-xs',
+      ghost: 'hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-main)]',
+      subtle: 'bg-[var(--accent-light)] hover:opacity-90 text-[var(--accent)]',
     };
 
     const sizes = {

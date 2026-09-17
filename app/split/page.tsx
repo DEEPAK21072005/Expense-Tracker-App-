@@ -51,7 +51,8 @@ export default function SplitPage() {
   // New Group form
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
-  const [membersInput, setMembersInput] = useState('Deepak, Rohan, Ananya');
+  const [membersInput, setMembersInput] = useState('');
+  const [currency, setCurrency] = useState('INR');
 
   // Add Expense form
   const [expDesc, setExpDesc] = useState('');
@@ -61,8 +62,15 @@ export default function SplitPage() {
   const loadGroups = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/split');
+      const [res, meRes] = await Promise.all([
+        fetch('/api/split'),
+        fetch('/api/auth/me'),
+      ]);
       const json = await res.json();
+      const meJson = await meRes.json();
+      if (meJson.success && meJson.data?.baseCurrency) {
+        setCurrency(meJson.data.baseCurrency);
+      }
       if (json.success && json.data.length > 0) {
         setGroups(json.data);
         if (!selectedGroupId) setSelectedGroupId(json.data[0].id);
@@ -135,7 +143,7 @@ export default function SplitPage() {
           paidById: expPaidById,
           description: expDesc.trim() || 'Shared Group Expense',
           amount: parsedAmount,
-          currency: 'INR',
+          currency: currency || 'INR',
           date: new Date().toISOString(),
           splitType: 'EQUAL',
         }),
@@ -191,7 +199,7 @@ export default function SplitPage() {
 
       {groups.length === 0 ? (
         <Card className="py-16 text-center">
-          <p className="text-sm text-neutral-400">No split groups created yet. Click "New Group" to get started.</p>
+          <p className="text-sm text-neutral-400">No split groups created yet. Click &quot;New Group&quot; to get started.</p>
         </Card>
       ) : (
         <div className="space-y-6">
@@ -220,7 +228,7 @@ export default function SplitPage() {
                 <div>
                   <CardTitle>{activeGroup.name} — Member Balances</CardTitle>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Total pool spend: {formatCurrency(activeGroup.totalGroupSpent, 'INR')}
+                    Total pool spend: {formatCurrency(activeGroup.totalGroupSpent, currency)}
                   </p>
                 </div>
               </CardHeader>
@@ -252,7 +260,7 @@ export default function SplitPage() {
                           }`}
                         >
                           {isPositive ? '+' : ''}
-                          {formatCurrency(b.netBalance, 'INR')}
+                          {formatCurrency(b.netBalance, currency)}
                         </span>
                       </div>
                     </div>
@@ -288,7 +296,7 @@ export default function SplitPage() {
                         <span className="text-neutral-800 dark:text-neutral-200">{s.toName}</span>
                       </div>
                       <div className="text-center font-bold text-blue-600 dark:text-blue-400 text-sm num-tabular">
-                        {formatCurrency(s.amount, 'INR')}
+                        {formatCurrency(s.amount, currency)}
                       </div>
                     </div>
                   ))}
@@ -326,7 +334,7 @@ export default function SplitPage() {
                         {formatCurrency(e.amount, e.currency)}
                       </span>
                       <p className="text-[11px] text-neutral-400">
-                        Split equally ({formatCurrency(e.amount / activeGroup.members.length, 'INR')} each)
+                        Split equally ({formatCurrency(e.amount / activeGroup.members.length, e.currency || currency)} each)
                       </p>
                     </div>
                   </div>
@@ -366,10 +374,10 @@ export default function SplitPage() {
             </label>
             <input
               type="text"
-              placeholder="e.g. Deepak, Rohan, Ananya"
+              placeholder="e.g. Alice, Bob, Charlie"
               value={membersInput}
               onChange={(e) => setMembersInput(e.target.value)}
-              className="w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:border-blue-500 focus:outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+              className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3.5 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
               required
             />
             <p className="text-[11px] text-neutral-400 mt-1">At least 2 members are required to split expenses.</p>
@@ -431,7 +439,7 @@ export default function SplitPage() {
 
             <div className="rounded-xl bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-300">
               This amount will be split equally among all {activeGroup.members.length} group members (
-              {expAmount ? formatCurrency(parseFloat(expAmount) / activeGroup.members.length, 'INR') : '₹0.00'}{' '}
+              {expAmount ? formatCurrency(parseFloat(expAmount) / activeGroup.members.length, currency) : formatCurrency(0, currency)}{' '}
               each).
             </div>
 

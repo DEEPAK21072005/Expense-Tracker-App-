@@ -14,10 +14,10 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://expense-tracker-pro.vercel.app'),
-  title: 'Expense Tracker Pro | Modern Personal Finance & Intelligence',
+  metadataBase: new URL('https://expense-tracker-pro-lime.vercel.app'),
+  title: 'Expense Tracker Pro | Private Personal Finance',
   description:
-    'A production-grade, Asian-Apple minimalist personal finance system with minor-unit accuracy, budget tracking, multi-member split, and vector PDF reports.',
+    'A private, account-based personal-finance tracker with accurate money handling and clear monthly reports.',
   applicationName: 'Expense Tracker Pro',
   authors: [{ name: 'Deepak Polisetti' }],
   manifest: '/manifest.webmanifest',
@@ -41,10 +41,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
   },
   openGraph: {
-    title: 'Expense Tracker Pro | Modern Personal Finance & Expense Intelligence',
+    title: 'Expense Tracker Pro | Private Personal Finance',
     description:
-      'Executive-grade personal finance, expense tracking, multi-account ledger, budget forecasting, and debt settlement platform.',
-    url: 'https://expense-tracker-pro.vercel.app',
+      'Private personal finance, multi-account tracking, budgeting, and monthly reports.',
+    url: 'https://expense-tracker-pro-lime.vercel.app',
     siteName: 'Expense Tracker Pro',
     images: [
       {
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Expense Tracker Pro | Modern Personal Finance',
     description:
-      'Executive-grade personal finance, expense tracking, multi-account ledger, and debt settlement platform.',
+      'Private personal finance, multi-account tracking, budgeting, and monthly reports.',
     images: ['/og-image.png'],
   },
 };
@@ -74,6 +74,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => { try { const saved = localStorage.getItem('theme_preference') || 'system'; const dark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches); document.documentElement.classList.toggle('dark', dark); document.documentElement.dataset.theme = dark ? 'dark' : 'light'; } catch {} })();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

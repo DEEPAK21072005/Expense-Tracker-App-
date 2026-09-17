@@ -27,6 +27,7 @@ export default function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
+  const [currency, setCurrency] = useState('INR');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -35,14 +36,16 @@ export default function TransactionsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [txRes, catRes, accRes] = await Promise.all([
+      const [txRes, catRes, accRes, meRes] = await Promise.all([
         fetch('/api/transactions').then((r) => r.json()),
         fetch('/api/categories').then((r) => r.json()),
         fetch('/api/accounts').then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
       ]);
       if (txRes.success) setTransactions(txRes.data);
       if (catRes.success) setCategories(catRes.data);
       if (accRes.success) setAccounts(accRes.data);
+      if (meRes.success && meRes.data?.baseCurrency) setCurrency(meRes.data.baseCurrency);
     } catch (err) {
       console.error('Error fetching transactions:', err);
     } finally {
@@ -207,15 +210,15 @@ export default function TransactionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-neutral-100/70 p-4 dark:bg-neutral-900/60 text-xs">
         <div className="flex items-center gap-6">
           <div>
-            <span className="text-neutral-500">Filtered Expenses:</span>{' '}
-            <span className="font-bold text-rose-600 dark:text-rose-400 num-tabular">
-              -{formatCurrency(totalFilteredExpense, 'INR')}
+            <span className="text-[var(--text-muted)]">Filtered Expenses:</span>{' '}
+            <span className="font-bold text-[var(--expense)] num-tabular">
+              -{formatCurrency(totalFilteredExpense, currency)}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500">Filtered Income:</span>{' '}
-            <span className="font-bold text-emerald-600 dark:text-emerald-400 num-tabular">
-              +{formatCurrency(totalFilteredIncome, 'INR')}
+            <span className="text-[var(--text-muted)]">Filtered Income:</span>{' '}
+            <span className="font-bold text-[var(--income)] num-tabular">
+              +{formatCurrency(totalFilteredIncome, currency)}
             </span>
           </div>
         </div>

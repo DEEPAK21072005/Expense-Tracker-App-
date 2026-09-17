@@ -99,18 +99,18 @@ graph TD
 npm install
 ```
 
-### 3. Initialize & Seed Database
+### 3. Initialize Database (Clean Slate)
 ```bash
 npx prisma db push
-node prisma/seed.js
 ```
-*(The seed script populates curated default categories, sample accounts, active budgets, and realistic demo transactions).*
+*(The database initializes with a completely clean schema — zero mock transactions, dummy balances, or artificial demo accounts. Every user starts with an authentic clean slate).*
 
 ### 4. Start Development Server
 ```bash
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+Create a new account at `/create-account` or sign in at `/login`.
 
 ### 5. Run Automated Tests
 ```bash
@@ -126,6 +126,12 @@ npm start
 ---
 
 ## 🎯 Key Feature Highlights
+
+### 0. Secure Authentication & Clean Slate Architecture
+- **Dedicated Flow**: First-class Create Account (`/create-account`) and Login (`/login`) pages with smooth transitions.
+- **Enterprise Security**: Password hashing with cryptographic PBKDF2/SHA-512 with unique salts, paired with secure server-side HTTP-only session cookies (`exp_session`).
+- **Clean Slate Guarantee**: Strictly zero pre-populated mock transactions, fake balances, or dummy people. New users start fresh with initial category templates and zero transaction clutter.
+- **Dynamic Multi-Currency**: Select your base currency (`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `SGD`) upon signup; all dashboards, budgets, reports, and bill splits dynamically adapt.
 
 ### 1. Executive Financial Dashboard (`/`)
 - Total Net Worth aggregated across all Cash, Bank, Savings, and Credit accounts.

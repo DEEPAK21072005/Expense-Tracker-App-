@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [splitGroups, setSplitGroups] = useState<SplitGroupItem[]>([]);
+  const [currency, setCurrency] = useState('INR');
   const [isLoading, setIsLoading] = useState(true);
 
   const currentMonth = new Date().getMonth() + 1;
@@ -75,17 +76,19 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accRes, txRes, bRes, sRes] = await Promise.all([
+      const [accRes, txRes, bRes, sRes, meRes] = await Promise.all([
         fetch('/api/accounts').then((r) => r.json()),
         fetch('/api/transactions').then((r) => r.json()),
         fetch(`/api/budgets?month=${currentMonth}&year=${currentYear}`).then((r) => r.json()),
         fetch('/api/split').then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
       ]);
 
       if (accRes.success) setAccounts(accRes.data);
       if (txRes.success) setTransactions(txRes.data);
       if (bRes.success) setBudgets(bRes.data);
       if (sRes.success) setSplitGroups(sRes.data);
+      if (meRes.success) setCurrency(meRes.data.baseCurrency);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -171,6 +174,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {accounts.length === 0 && !isLoading ? (
+        <Card className="border-[var(--border-subtle)] bg-[var(--warm-surface)] p-6 sm:p-7">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent)]">A clean beginning</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Start with the account you use most.</h2>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Your dashboard stays empty until you add your own account, categories, and transactions. We never add made-up finance data.</p>
+            </div>
+            <Link href="/accounts"><Button><Wallet className="h-4 w-4" /> Set up accounts</Button></Link>
+          </div>
+        </Card>
+      ) : null}
+
       {/* 4 Core Financial KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card elevated>
@@ -184,7 +200,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <p className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 num-tabular">
-              {formatCurrency(totalNetWorth, 'INR')}
+              {formatCurrency(totalNetWorth, currency)}
             </p>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Across {accounts.length} active accounts
@@ -203,7 +219,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <p className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 num-tabular">
-              +{formatCurrency(monthlyIncome, 'INR')}
+              +{formatCurrency(monthlyIncome, currency)}
             </p>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Current month total</p>
           </div>
@@ -220,7 +236,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <p className="text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400 num-tabular">
-              -{formatCurrency(monthlyExpenses, 'INR')}
+              -{formatCurrency(monthlyExpenses, currency)}
             </p>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Current month spend</p>
           </div>
@@ -240,7 +256,7 @@ export default function DashboardPage() {
               {savingsRate.toFixed(1)}%
             </p>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              Net cash flow: {formatCurrency(netCashFlow, 'INR')}
+              Net cash flow: {formatCurrency(netCashFlow, currency)}
             </p>
           </div>
         </Card>
@@ -267,7 +283,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-neutral-500 num-tabular">{percent.toFixed(1)}%</span>
                         <span className="font-semibold text-neutral-900 dark:text-neutral-100 num-tabular">
-                          {formatCurrency(cat.amount, 'INR')}
+                          {formatCurrency(cat.amount, currency)}
                         </span>
                       </div>
                     </div>
@@ -320,8 +336,8 @@ export default function DashboardPage() {
                     />
                   </div>
                   <div className="flex justify-between text-[11px] text-neutral-500">
-                    <span>Spent: {formatCurrency(b.spent, 'INR')}</span>
-                    <span>Limit: {formatCurrency(b.limit, 'INR')}</span>
+                    <span>Spent: {formatCurrency(b.spent, currency)}</span>
+                    <span>Limit: {formatCurrency(b.limit, currency)}</span>
                   </div>
                 </div>
               ))
@@ -330,7 +346,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Upgraded Group Expense Splitting (Preserves & Modernizes Legacy Mode) */}
       {splitGroups.length > 0 ? (
         <Card className="border-blue-100/60 bg-gradient-to-r from-blue-50/40 via-white to-white dark:border-blue-900/30 dark:from-blue-950/20 dark:via-[#14171f] dark:to-[#14171f]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -343,10 +358,10 @@ export default function DashboardPage() {
                   <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                     Group Expense Splitter
                   </h3>
-                  <Badge variant="info">Legacy Mode Upgraded</Badge>
+                  <Badge variant="info">Shared expenses</Badge>
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  {splitGroups[0].name} — Total pool spent: {formatCurrency(splitGroups[0].totalGroupSpent, 'INR')}
+                  {splitGroups[0].name} — Total pool spent: {formatCurrency(splitGroups[0].totalGroupSpent, currency)}
                 </p>
               </div>
             </div>
@@ -362,7 +377,7 @@ export default function DashboardPage() {
                     {splitGroups[0].settlements[0].toName}
                   </span>{' '}
                   <span className="font-bold text-blue-600 dark:text-blue-400 num-tabular">
-                    {formatCurrency(splitGroups[0].settlements[0].amount, 'INR')}
+                    {formatCurrency(splitGroups[0].settlements[0].amount, currency)}
                   </span>
                 </div>
               ) : (
@@ -390,7 +405,7 @@ export default function DashboardPage() {
         <div className="mt-2 overflow-x-auto">
           {transactions.length === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-500">
-              No transactions recorded. Click "Add Transaction" or press "N" on your keyboard to start!
+              No transactions recorded. Click &quot;Add Transaction&quot; or press &quot;N&quot; on your keyboard to start!
             </p>
           ) : (
             <table className="w-full text-left text-xs">

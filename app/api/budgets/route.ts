@@ -1,142 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { fromMinorUnits } from '@/lib/money';
 import { BudgetInputSchema } from '@/lib/validation';
-import { addMoney, subtractMoney } from '@/lib/money';
 
-async function getDefaultUser() {
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email: 'user@expensetracker.pro', name: 'Personal User', baseCurrency: 'INR' },
+function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
+function monthRange(year: number, month: number) { return { gte: new Date(Date.UTC(year, month - 1, 1)), lte: new Date(Date.UTC(year, month, 1) - 1) }; }
+
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
+  const now = new Date(); const month = Number(request.nextUrl.searchParams.get('month') ?? now.getUTCMonth() + 1); const year = Number(request.nextUrl.searchParams.get('year') ?? now.getUTCFullYear());
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2020 || year > 2099) return NextResponse.json({ success: false, error: 'Invalid report month' }, { status: 400 });
+  try {
+    const [budgets, expenses] = await Promise.all([
+      prisma.budget.findMany({ where: { userId: user.id, month, year }, include: { category: true }, orderBy: { createdAt: 'asc' } }),
+      prisma.transaction.findMany({ where: { userId: user.id, type: 'EXPENSE', date: monthRange(year, month) }, select: { categoryId: true, amountMinor: true } }),
+    ]);
+    const spendByCategory = new Map<string, number>(); let totalMinor = 0;
+    for (const expense of expenses) { totalMinor += expense.amountMinor; if (expense.categoryId) spendByCategory.set(expense.categoryId, (spendByCategory.get(expense.categoryId) ?? 0) + expense.amountMinor); }
+    const data = budgets.map((budget) => {
+      const spentMinor = budget.categoryId ? spendByCategory.get(budget.categoryId) ?? 0 : totalMinor;
+      const remainingMinor = budget.amountMinor - spentMinor;
+      const percentUsed = budget.amountMinor === 0 ? 0 : Math.round((spentMinor / budget.amountMinor) * 100);
+      return { id: budget.id, categoryId: budget.categoryId, categoryName: budget.category?.name ?? 'Overall monthly spending', categoryColor: budget.category?.color ?? '#64748B', limit: fromMinorUnits(budget.amountMinor, user.baseCurrency), spent: fromMinorUnits(spentMinor, user.baseCurrency), remaining: fromMinorUnits(remainingMinor, user.baseCurrency), limitMinor: budget.amountMinor, spentMinor, remainingMinor, percentUsed, isOverspent: remainingMinor < 0, isWarning: percentUsed >= budget.alertThreshold * 100, month: budget.month, year: budget.year };
     });
-  }
-  return user;
+    return NextResponse.json({ success: true, data });
+  } catch (error) { console.error('Budgets query failed', error); return NextResponse.json({ success: false, error: 'Unable to load budgets' }, { status: 500 }); }
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const user = await getDefaultUser();
-    const { searchParams } = new URL(req.url);
-    const now = new Date();
-    const month = parseInt(searchParams.get('month') || String(now.getMonth() + 1), 10);
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()), 10);
-
-    const budgets = await prisma.budget.findMany({
-      where: {
-        userId: user.id,
-        month,
-        year,
-      },
-      include: {
-        category: true,
-      },
-    });
-
-    // Date range for this month
-    const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-
-    // Get all expense transactions in this month
-    const monthlyExpenses = await prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-        type: 'EXPENSE',
-        date: { gte: startOfMonth, lte: endOfMonth },
-      },
-    });
-
-    // Compute spent amount per category
-    const spentByCat: Record<string, number> = {};
-    let totalSpent = 0;
-
-    for (const tx of monthlyExpenses) {
-      if (tx.categoryId) {
-        spentByCat[tx.categoryId] = addMoney(spentByCat[tx.categoryId] || 0, tx.amount, tx.currency);
-      }
-      totalSpent = addMoney(totalSpent, tx.amount, tx.currency);
-    }
-
-    const budgetMetrics = budgets.map((b) => {
-      const spent = b.categoryId ? spentByCat[b.categoryId] || 0 : totalSpent;
-      const remaining = subtractMoney(b.amount, spent);
-      const percentUsed = b.amount > 0 ? Math.round((spent / b.amount) * 100) : 0;
-      const isOverspent = remaining < 0;
-      const isWarning = percentUsed >= (b.alertThreshold * 100);
-
-      return {
-        id: b.id,
-        categoryId: b.categoryId,
-        categoryName: b.category?.name || 'Overall Monthly Spending',
-        categoryColor: b.category?.color || '#3B82F6',
-        limit: b.amount,
-        spent,
-        remaining,
-        percentUsed,
-        isOverspent,
-        isWarning,
-        month: b.month,
-        year: b.year,
-      };
-    });
-
-    return NextResponse.json({ success: true, data: budgetMetrics });
-  } catch (error) {
-    console.error('Budgets GET error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch budgets' }, { status: 500 });
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const user = await getDefaultUser();
-    const body = await req.json();
-
-    const parseResult = BudgetInputSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { success: false, error: parseResult.error.errors[0]?.message || 'Validation error' },
-        { status: 400 }
-      );
-    }
-
-    const { categoryId, amount, period, month, year, alertThreshold } = parseResult.data;
-    const now = new Date();
-    const targetMonth = month || now.getMonth() + 1;
-    const targetYear = year || now.getFullYear();
-
-    // Check if budget already exists for this category/period
-    const existing = await prisma.budget.findFirst({
-      where: {
-        userId: user.id,
-        categoryId: categoryId || null,
-        month: targetMonth,
-        year: targetYear,
-      },
-    });
-
-    let budget;
-    if (existing) {
-      budget = await prisma.budget.update({
-        where: { id: existing.id },
-        data: { amount, alertThreshold: alertThreshold || 0.85 },
-      });
-    } else {
-      budget = await prisma.budget.create({
-        data: {
-          userId: user.id,
-          categoryId: categoryId || null,
-          amount,
-          period,
-          month: targetMonth,
-          year: targetYear,
-          alertThreshold: alertThreshold || 0.85,
-        },
-      });
-    }
-
-    return NextResponse.json({ success: true, data: budget }, { status: 200 });
-  } catch (error) {
-    console.error('Budgets POST error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create budget' }, { status: 500 });
-  }
+    const parsed = BudgetInputSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid budget' }, { status: 400 });
+    const input = parsed.data as typeof parsed.data & { amountMinor: number };
+    if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Budgets use your base currency (${user.baseCurrency})` }, { status: 422 });
+    if (input.categoryId && !await prisma.category.findFirst({ where: { id: input.categoryId, userId: user.id, type: 'EXPENSE' } })) return NextResponse.json({ success: false, error: 'The selected category is unavailable' }, { status: 422 });
+    const now = new Date(); const month = input.month ?? now.getUTCMonth() + 1; const year = input.year ?? now.getUTCFullYear();
+    const existing = await prisma.budget.findFirst({ where: { userId: user.id, categoryId: input.categoryId ?? null, month, year } });
+    const budget = existing ? await prisma.budget.update({ where: { id: existing.id }, data: { amountMinor: input.amountMinor, alertThreshold: input.alertThreshold } }) : await prisma.budget.create({ data: { userId: user.id, categoryId: input.categoryId ?? null, amountMinor: input.amountMinor, period: 'MONTHLY', month, year, alertThreshold: input.alertThreshold } });
+    return NextResponse.json({ success: true, data: budget }, { status: existing ? 200 : 201 });
+  } catch (error) { console.error('Budget save failed', error); return NextResponse.json({ success: false, error: 'Unable to save this budget' }, { status: 500 }); }
 }

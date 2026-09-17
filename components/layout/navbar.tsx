@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Sun, Moon, Plus, WalletCards } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Sun, Moon, Plus, LogOut } from 'lucide-react';
 import { useTheme } from '../theme-provider';
 import { Button } from '../ui/button';
 
@@ -12,25 +13,41 @@ export interface NavbarProps {
 }
 
 export function Navbar({ onOpenQuickAdd }: NavbarProps) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const router = useRouter();
+  const [name, setName] = useState('');
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((response) => response.json())
+      .then((result) => {
+        if (result.success) setName(result.data.name);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-neutral-200/80 bg-white/80 backdrop-blur-md dark:border-neutral-800/80 dark:bg-[#0b0d11]/80">
+    <header className="sticky top-0 z-40 w-full border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/85 backdrop-blur-md transition-colors">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
-            {/* App Icon */}
+          <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-85">
             <img
               src="/icon-192.png"
               alt="Expense Tracker Pro Icon"
-              className="h-9 w-9 rounded-xl object-cover shadow-sm ring-1 ring-black/10 dark:ring-white/10"
+              className="h-8 w-8 rounded-xl object-cover shadow-sm ring-1 ring-black/5 dark:ring-white/10"
             />
-            <div>
-              <span className="text-base font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
-                Expense<span className="text-blue-600 dark:text-blue-400">Tracker</span>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold tracking-tight text-[var(--text-main)]">
+                Expense<span className="text-[var(--accent)] font-bold">Tracker</span>
               </span>
-              <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-                PRO
+              <span className="rounded-full bg-[var(--accent-light)] px-2 py-0.5 text-[10px] font-semibold tracking-wider text-[var(--accent)] uppercase">
+                Pro
               </span>
             </div>
           </Link>
@@ -49,15 +66,26 @@ export function Navbar({ onOpenQuickAdd }: NavbarProps) {
 
           {/* Theme Toggle Button */}
           <button
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)]"
           >
             {resolvedTheme === 'dark' ? (
               <Sun className="h-4 w-4 text-amber-400" />
             ) : (
-              <Moon className="h-4 w-4 text-neutral-600" />
+              <Moon className="h-4 w-4 text-stone-600" />
             )}
+          </button>
+
+          <button
+            onClick={signOut}
+            title="Sign out"
+            aria-label="Sign out"
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-transparent px-2.5 text-xs font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)]"
+          >
+            <span className="hidden max-w-28 truncate sm:inline">{name || 'Account'}</span>
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>

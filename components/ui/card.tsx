@@ -11,10 +11,10 @@ export function Card({ className, elevated = false, children, ...props }: CardPr
     <div
       className={twMerge(
         clsx(
-          'rounded-2xl border border-neutral-200/80 bg-white p-5 transition-all duration-200 dark:border-neutral-800/80 dark:bg-[#14171f]',
+          'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 transition-all duration-200 text-[var(--text-main)]',
           elevated
-            ? 'shadow-md shadow-neutral-900/5 dark:shadow-black/20'
-            : 'shadow-sm shadow-neutral-900/3',
+            ? 'shadow-[0_4px_24px_-6px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_24px_-6px_rgba(0,0,0,0.4)]'
+            : 'shadow-[0_1px_3px_rgba(0,0,0,0.03)]',
           className
         )
       )}
@@ -36,7 +36,7 @@ export function CardHeader({ className, children, ...props }: React.HTMLAttribut
 export function CardTitle({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={twMerge('text-sm font-semibold tracking-tight text-neutral-800 dark:text-neutral-100', className)}
+      className={twMerge('text-sm font-semibold tracking-tight text-[var(--text-main)]', className)}
       {...props}
     >
       {children}
