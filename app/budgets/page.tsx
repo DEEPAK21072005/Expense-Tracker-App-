@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -32,10 +32,15 @@ export default function BudgetsPage() {
   const [selectedCatId, setSelectedCatId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+
+  // Track whether the initial category has been set to avoid the infinite loop
+  // that previously occurred by including `selectedCatId` in `useCallback` deps
+  const catInitialised = useRef(false);
 
   const loadBudgets = useCallback(async () => {
     try {
@@ -49,14 +54,16 @@ export default function BudgetsPage() {
       if (cRes.success) {
         const expenseCats = cRes.data.filter((c: { type: string }) => c.type === 'EXPENSE');
         setCategories(expenseCats);
-        if (expenseCats.length > 0 && !selectedCatId) {
+        // Only set the initial selected category once to avoid infinite re-render
+        if (expenseCats.length > 0 && !catInitialised.current) {
+          catInitialised.current = true;
           setSelectedCatId(expenseCats[0].id);
         }
       }
     } catch (err) {
       console.error('Failed to load budgets:', err);
     }
-  }, [month, year, selectedCatId]);
+  }, [month, year]); // ← removed selectedCatId from deps to break the infinite loop
 
   useEffect(() => {
     loadBudgets();
@@ -64,9 +71,10 @@ export default function BudgetsPage() {
 
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError('');
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert('Please enter a valid budget amount.');
+      setSaveError('Please enter a valid budget amount greater than zero.');
       return;
     }
 
@@ -78,17 +86,22 @@ export default function BudgetsPage() {
         body: JSON.stringify({
           categoryId: selectedCatId || null,
           amount: parsedAmount,
+          currency,          // ← was missing — caused silent 422 failures
           month,
           year,
         }),
       });
-      if (res.ok) {
-        setAmount('');
-        setIsModalOpen(false);
-        loadBudgets();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSaveError(data?.error ?? 'Unable to save budget. Please try again.');
+        return;
       }
+      setAmount('');
+      setIsModalOpen(false);
+      loadBudgets();
     } catch (err) {
       console.error('Failed to save budget:', err);
+      setSaveError('Network error — please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -106,7 +119,7 @@ export default function BudgetsPage() {
           </p>
         </div>
 
-        <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-2">
+        <Button size="sm" onClick={() => { setSaveError(''); setIsModalOpen(true); }} className="gap-2">
           <Plus className="h-4 w-4" />
           Set Category Budget
         </Button>
@@ -194,35 +207,48 @@ export default function BudgetsPage() {
             <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5">
               Category
             </label>
-            <select
-              value={selectedCatId}
-              onChange={(e) => setSelectedCatId(e.target.value)}
-              className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-              required
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {categories.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] py-2">
+                No expense categories found. Add categories first.
+              </p>
+            ) : (
+              <select
+                value={selectedCatId}
+                onChange={(e) => setSelectedCatId(e.target.value)}
+                className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                required
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <Input
             label={`Monthly Limit (${currency})`}
             type="number"
             step="100"
+            min="1"
             placeholder="e.g. 10000"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required
           />
 
+          {saveError && (
+            <p role="alert" className="rounded-xl bg-[var(--danger-bg)] px-3 py-2.5 text-sm text-[var(--danger)]">
+              {saveError}
+            </p>
+          )}
+
           <div className="flex justify-end gap-2.5 pt-2">
             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button type="submit" isLoading={isLoading} disabled={categories.length === 0}>
               Save Budget
             </Button>
           </div>
