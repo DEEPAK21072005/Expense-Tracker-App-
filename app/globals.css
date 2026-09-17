@@ -16,6 +16,7 @@
     --text-muted: #6e6a61;
     --text-dim: #9c978b;
     --ink: #1c1b18;
+    --ink-contrast: #ffffff;
     --accent: #2557a7;
     --accent-hover: #1c4486;
     --accent-light: #eef4fc;
@@ -43,10 +44,11 @@
     --text-muted: #a19f96;
     --text-dim: #6b6961;
     --ink: #f4f3ef;
-    --accent: #82a8ec;
-    --accent-hover: #abc5f4;
-    --accent-light: #1b263b;
-    --focus-ring: rgb(130 168 236 / 0.25);
+    --ink-contrast: #111213;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-light: #172554;
+    --focus-ring: rgb(59 130 246 / 0.25);
     --income: #34d399;
     --income-bg: #0d2820;
     --expense: #f87171;

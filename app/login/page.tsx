@@ -23,9 +23,14 @@ function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const result = await response.json();
+      let result: { success?: boolean; error?: string } | null = null;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
       if (!response.ok) {
-        setError(result.error ?? 'Unable to sign in');
+        setError(result?.error ?? 'Unable to sign in. Please try again.');
         return;
       }
       const destination = params.get('next');
@@ -69,7 +74,7 @@ function LoginForm() {
       )}
       <button
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--ink)] px-4 py-3.5 text-sm font-semibold text-white transition hover:opacity-90 focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--ink)] px-4 py-3.5 text-sm font-semibold text-[var(--ink-contrast)] shadow-sm transition-all hover:opacity-90 active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
         type="submit"
       >
         {isSubmitting ? (
@@ -89,7 +94,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-[var(--bg-primary)] px-5 py-8 text-[var(--text-main)] sm:grid sm:place-items-center">
       <section className="mx-auto w-full max-w-[420px]">
         <div className="mb-10 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--ink)] text-white shadow-sm">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--ink)] text-[var(--ink-contrast)] shadow-sm">
             <WalletCards className="h-5 w-5" />
           </div>
           <div>

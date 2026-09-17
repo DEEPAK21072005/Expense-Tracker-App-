@@ -129,7 +129,12 @@ npm start
 
 ### 0. Secure Authentication & Clean Slate Architecture
 - **Dedicated Flow**: First-class Create Account (`/create-account`) and Login (`/login`) pages with smooth transitions.
-- **Enterprise Security**: Password hashing with cryptographic PBKDF2/SHA-512 with unique salts, paired with secure server-side HTTP-only session cookies (`exp_session`).
+- **Enterprise Security**: Password hashing with cryptographic bcrypt/salts, paired with secure server-side HTTP-only session cookies (`expense_tracker_session`).
+- **Validated Error Feedback**:
+  - **Account Already Registered**: Returns clear feedback (`"An account already exists for this email address"`) if attempting to register an existing email.
+  - **Unregistered or Invalid Credentials**: Securely displays `"Incorrect email address or password"` to prevent user enumeration attacks.
+  - **Input Validation**: Enforces minimum 10 characters with at least one letter and one number for passwords.
+- **High-Contrast Design**: WCAG AAA compliant buttons and iconography dynamically calibrated for dark mode and light mode (`--ink` / `--ink-contrast`) with zero invisible text.
 - **Clean Slate Guarantee**: Strictly zero pre-populated mock transactions, fake balances, or dummy people. New users start fresh with initial category templates and zero transaction clutter.
 - **Dynamic Multi-Currency**: Select your base currency (`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `SGD`) upon signup; all dashboards, budgets, reports, and bill splits dynamically adapt.
 
