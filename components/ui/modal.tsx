@@ -21,31 +21,78 @@ export function Modal({
   maxWidth = 'md',
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'Tab' && dialogRef.current) {
-        const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
-        if (!focusable.length) return;
-        const first = focusable[0]; const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  // Manage overflow, initial focus, and cleanup
+  useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
       document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-      requestAnimationFrame(() => dialogRef.current?.focus());
+
+      // Set initial focus once when opening, without stealing focus from active children
+      const timer = requestAnimationFrame(() => {
+        if (!dialogRef.current) return;
+        if (dialogRef.current.contains(document.activeElement)) return;
+
+        const firstInput = dialogRef.current.querySelector<HTMLElement>(
+          'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        );
+        if (firstInput) {
+          firstInput.focus();
+        } else {
+          dialogRef.current.focus();
+        }
+      });
+
+      return () => {
+        cancelAnimationFrame(timer);
+        document.body.style.overflow = 'unset';
+        if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
+          previousFocusRef.current.focus();
+        }
+      };
     } else {
       document.body.style.overflow = 'unset';
     }
+  }, [isOpen]);
 
+  // Handle keyboard events (Escape, Tab trap)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = [
+          ...dialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          ),
+        ];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -61,7 +108,7 @@ export function Modal({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        onClick={() => onCloseRef.current()}
       />
 
       {/* Dialog container */}
@@ -80,11 +127,13 @@ export function Modal({
               {title}
             </h2>
             {description ? (
-              <p id="modal-description" className="mt-0.5 text-xs text-[var(--text-muted)]">{description}</p>
+              <p id="modal-description" className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {description}
+              </p>
             ) : null}
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onCloseRef.current()}
             type="button"
             aria-label="Close dialog"
             className="rounded-full p-1.5 text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)] transition-colors"
