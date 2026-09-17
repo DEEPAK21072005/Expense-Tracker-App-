@@ -35,6 +35,7 @@ export default function RecurringPage() {
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -75,6 +76,7 @@ export default function RecurringPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError('');
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       alert('Please enter a valid amount.');
@@ -100,14 +102,19 @@ export default function RecurringPage() {
         }),
       });
 
-      if (res.ok) {
-        setDescription('');
-        setAmount('');
-        setIsModalOpen(false);
-        loadData();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSaveError(data?.error ?? 'Unable to save subscription. Please try again.');
+        return;
       }
+      setDescription('');
+      setAmount('');
+      setSaveError('');
+      setIsModalOpen(false);
+      loadData();
     } catch (err) {
       console.error('Failed to create recurring subscription:', err);
+      setSaveError('Network error — please check your connection.');
     } finally {
       setIsLoading(false);
     }
@@ -226,9 +233,10 @@ export default function RecurringPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Amount (INR)"
+              label={`Amount (${currency})`}
               type="number"
               step="0.01"
+              min="0.01"
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -279,6 +287,12 @@ export default function RecurringPage() {
               </select>
             </div>
           </div>
+
+          {saveError && (
+            <p role="alert" className="rounded-xl bg-[var(--danger-bg)] px-3 py-2.5 text-sm text-[var(--danger)]">
+              {saveError}
+            </p>
+          )}
 
           <div className="flex justify-end gap-2.5 pt-2">
             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
