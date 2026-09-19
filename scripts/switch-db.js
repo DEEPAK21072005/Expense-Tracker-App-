@@ -17,7 +17,18 @@ if (isPostgres) {
 
   try {
     console.log('[DB Switch] Pushing schema to PostgreSQL database...');
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+    let prismaCli;
+    try {
+      prismaCli = require.resolve('prisma/build/index.js');
+    } catch {
+      prismaCli = null;
+    }
+
+    if (prismaCli) {
+      execSync(`node "${prismaCli}" db push --accept-data-loss`, { stdio: 'inherit' });
+    } else {
+      execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+    }
     console.log('[DB Switch] Schema successfully synced to PostgreSQL!');
   } catch (err) {
     console.warn('[DB Switch] Notice during prisma db push:', err.message);
