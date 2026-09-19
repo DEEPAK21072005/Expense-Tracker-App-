@@ -60,6 +60,10 @@ export default function AccountsPage() {
         fetch('/api/categories'),
         fetch('/api/auth/me'),
       ]);
+      if (userResponse.status === 401 || accountResponse.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       const [accountResult, categoryResult, userResult] = await Promise.all([
         accountResponse.json(),
         categoryResponse.json(),
@@ -89,6 +93,10 @@ export default function AccountsPage() {
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
         setAccountError(result.error ?? 'Unable to create the account. Please try again.');
         return;
       }
@@ -114,6 +122,10 @@ export default function AccountsPage() {
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
         setCategoryError(result.error ?? 'Unable to create the category. Please try again.');
         return;
       }

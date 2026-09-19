@@ -7,13 +7,9 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith('/api/')) return NextResponse.next();
 
-  const hasSession = request.cookies.has('expense_tracker_session');
-
-  if (hasSession && authPages.has(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
   if (publicPaths.has(pathname)) return NextResponse.next();
+
+  const hasSession = request.cookies.has('expense_tracker_session');
 
   if (!hasSession) {
     const url = new URL('/login', request.url);
