@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "description": "Production-grade, current-generation personal finance and expense management platform",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "node ./node_modules/next/dist/bin/next dev",
     "build": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
