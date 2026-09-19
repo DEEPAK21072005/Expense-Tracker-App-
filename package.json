@@ -7,17 +7,17 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
-    "start": "node ./node_modules/next/dist/bin/next start",
+    "dev": "node ./scripts/run-cli.js next dev",
+    "build": "node ./scripts/switch-db.js && node ./scripts/run-cli.js prisma generate && node ./scripts/run-cli.js next build",
+    "start": "node ./scripts/run-cli.js next start",
     "lint": "eslint .",
-    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
-    "db:migrate": "node ./node_modules/prisma/build/index.js migrate deploy",
-    "test": "node ./node_modules/vitest/vitest.mjs run",
-    "test:watch": "node ./node_modules/vitest/vitest.mjs",
-    "postinstall": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate",
-    "prisma:generate": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate",
-    "prisma:push": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js db push"
+    "typecheck": "node ./scripts/run-cli.js tsc --noEmit",
+    "db:migrate": "node ./scripts/run-cli.js prisma migrate deploy",
+    "test": "node ./scripts/run-cli.js vitest run",
+    "test:watch": "node ./scripts/run-cli.js vitest",
+    "postinstall": "node ./scripts/switch-db.js && node ./scripts/run-cli.js prisma generate",
+    "prisma:generate": "node ./scripts/switch-db.js && node ./scripts/run-cli.js prisma generate",
+    "prisma:push": "node ./scripts/switch-db.js && node ./scripts/run-cli.js prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
@@ -26,9 +26,11 @@
     "lucide-react": "^1.16.0",
     "next": "^15.2.1",
     "pdf-lib": "^1.17.1",
+    "prisma": "^6.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2",
+    "typescript": "^5.7.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -39,9 +41,7 @@
     "postcss": "^8.5.3",
     "eslint": "^9.21.0",
     "eslint-config-next": "^15.2.1",
-    "prisma": "^6.4.1",
     "tailwindcss": "^4.0.9",
-    "typescript": "^5.7.3",
     "vitest": "^3.0.7"
   }
 }
