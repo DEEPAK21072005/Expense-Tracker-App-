@@ -5,16 +5,16 @@
   "description": "Production-grade, current-generation personal finance and expense management platform",
   "scripts": {
     "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
+    "build": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "eslint .",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
     "db:migrate": "node ./node_modules/prisma/build/index.js migrate deploy",
     "test": "node ./node_modules/vitest/vitest.mjs run",
     "test:watch": "node ./node_modules/vitest/vitest.mjs",
-    "postinstall": "node ./node_modules/prisma/build/index.js generate",
-    "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
-    "prisma:push": "node ./node_modules/prisma/build/index.js db push"
+    "postinstall": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate",
+    "prisma:generate": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js generate",
+    "prisma:push": "node ./scripts/switch-db.js && node ./node_modules/prisma/build/index.js db push"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",

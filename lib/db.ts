@@ -176,6 +176,12 @@ function ensureSqliteTables(filePath: string) {
 }
 
 function prepareDatabaseUrl() {
+  const url = process.env.DATABASE_URL;
+  if (url && (url.startsWith('postgres://') || url.startsWith('postgresql://'))) {
+    // Hosted PostgreSQL (Neon, Supabase, Vercel Postgres) — use connection string directly
+    return;
+  }
+
   const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
 
   if (isServerless) {
@@ -187,9 +193,9 @@ function prepareDatabaseUrl() {
     process.env.DATABASE_URL = process.env.NODE_ENV === 'production' ? 'file:/tmp/dev.db' : 'file:./dev.db';
   }
 
-  const url = process.env.DATABASE_URL;
-  if (url && url.startsWith('file:')) {
-    const rawPath = url.replace(/^file:/, '');
+  const fileUrl = process.env.DATABASE_URL;
+  if (fileUrl && fileUrl.startsWith('file:')) {
+    const rawPath = fileUrl.replace(/^file:/, '');
     const isTmp = rawPath.startsWith('/tmp') || rawPath.startsWith('\\tmp');
     if (isTmp) {
       try {
