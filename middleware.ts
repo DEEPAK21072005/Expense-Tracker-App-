@@ -8,6 +8,9 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) return NextResponse.next();
 
   if (publicPaths.has(pathname)) return NextResponse.next();
+  if (/\.(png|jpg|jpeg|gif|svg|ico|webp|webmanifest|json)$/i.test(pathname)) {
+    return NextResponse.next();
+  }
 
   const hasSession = request.cookies.has('expense_tracker_session');
 
@@ -20,4 +23,8 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon-.*\\.png|apple-touch-icon.*\\.png).*)'] };
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|webmanifest|json)$).*)',
+  ],
+};

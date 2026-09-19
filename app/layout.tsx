@@ -13,7 +13,7 @@ export const viewport: Viewport = {
   ],
 };
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://expense-tracker-pro.onrender.com';
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://expense-tracker-pro-3hon.onrender.com';
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
