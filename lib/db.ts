@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function prepareDatabaseUrl() {
-  if (!process.env.DATABASE_URL) {
+  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+
+  if (isServerless) {
+    // Vercel serverless /var/task is read-only; SQLite must be in /tmp
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
+      process.env.DATABASE_URL = 'file:/tmp/dev.db';
+    }
+  } else if (!process.env.DATABASE_URL) {
     process.env.DATABASE_URL = process.env.NODE_ENV === 'production' ? 'file:/tmp/dev.db' : 'file:./dev.db';
   }
 

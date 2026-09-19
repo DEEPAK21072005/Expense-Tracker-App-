@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { DEFAULT_CATEGORIES, getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { CategoryInputSchema } from '@/lib/validation';
 
@@ -8,7 +8,19 @@ function unauthorized() { return NextResponse.json({ success: false, error: 'Sig
 export async function GET() {
   const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const categories = await prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ type: 'asc' }, { name: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    let categories = await prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ type: 'asc' }, { name: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    if (categories.length === 0) {
+      await prisma.category.createMany({
+        data: DEFAULT_CATEGORIES.map((c) => ({
+          userId: user.id,
+          name: c.name,
+          type: c.type,
+          icon: c.icon,
+          color: c.color,
+        })),
+      });
+      categories = await prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ type: 'asc' }, { name: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    }
     return NextResponse.json({ success: true, data: categories });
   } catch (error) { console.error('Categories query failed', error); return NextResponse.json({ success: false, error: 'Unable to load categories' }, { status: 500 }); }
 }

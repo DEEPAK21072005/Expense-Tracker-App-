@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const parsed = BudgetInputSchema.safeParse(await request.json());
+    const rawBody = await request.json();
+    if (!rawBody.currency) rawBody.currency = user.baseCurrency;
+    const parsed = BudgetInputSchema.safeParse(rawBody);
     if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid budget' }, { status: 400 });
     const input = parsed.data as typeof parsed.data & { amountMinor: number };
     if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Budgets use your base currency (${user.baseCurrency})` }, { status: 422 });

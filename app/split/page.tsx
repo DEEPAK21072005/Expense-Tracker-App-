@@ -48,6 +48,12 @@ export default function SplitPage() {
   const [isNewGroupOpen, setIsNewGroupOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
 
+  // Status & error messages
+  const [groupError, setGroupError] = useState('');
+  const [expenseError, setExpenseError] = useState('');
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+
   // New Group form
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
@@ -73,7 +79,9 @@ export default function SplitPage() {
       }
       if (json.success && json.data.length > 0) {
         setGroups(json.data);
-        if (!selectedGroupId) setSelectedGroupId(json.data[0].id);
+        if (!selectedGroupId || !json.data.some((g: SplitGroup) => g.id === selectedGroupId)) {
+          setSelectedGroupId(json.data[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load groups:', err);
@@ -90,16 +98,26 @@ export default function SplitPage() {
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const members = membersInput
+    setGroupError('');
+
+    if (!groupName.trim()) {
+      setGroupError('Group name is required.');
+      return;
+    }
+
+    const rawMembers = membersInput
       .split(',')
       .map((m) => m.trim())
       .filter((m) => m.length > 0);
 
+    const members = [...new Set(rawMembers)];
+
     if (members.length < 2) {
-      alert('Please enter at least 2 member names separated by commas.');
+      setGroupError('Please enter at least 2 distinct member names separated by commas.');
       return;
     }
 
+    setIsSubmittingGroup(true);
     try {
       const res = await fetch('/api/split', {
         method: 'POST',
@@ -111,29 +129,38 @@ export default function SplitPage() {
           members,
         }),
       });
-      if (res.ok) {
-        setGroupName('');
-        setGroupDesc('');
-        setIsNewGroupOpen(false);
-        loadGroups();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setGroupError(data?.error ?? 'Unable to create group. Please try again.');
+        return;
       }
+      setGroupName('');
+      setGroupDesc('');
+      setMembersInput('');
+      setIsNewGroupOpen(false);
+      await loadGroups();
     } catch (err) {
       console.error('Failed to create group:', err);
+      setGroupError('Network error — please check your connection and try again.');
+    } finally {
+      setIsSubmittingGroup(false);
     }
   };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    setExpenseError('');
     const parsedAmount = parseFloat(expAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert('Please enter a valid positive amount.');
+      setExpenseError('Please enter a valid positive amount.');
       return;
     }
     if (!activeGroup || !expPaidById) {
-      alert('Please select who paid for the expense.');
+      setExpenseError('Please select who paid for the expense.');
       return;
     }
 
+    setIsSubmittingExpense(true);
     try {
       const res = await fetch('/api/split', {
         method: 'POST',
@@ -149,14 +176,21 @@ export default function SplitPage() {
         }),
       });
 
-      if (res.ok) {
-        setExpDesc('');
-        setExpAmount('');
-        setIsAddExpenseOpen(false);
-        loadGroups();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setExpenseError(data?.error ?? 'Unable to record split expense. Please try again.');
+        return;
       }
+
+      setExpDesc('');
+      setExpAmount('');
+      setIsAddExpenseOpen(false);
+      await loadGroups();
     } catch (err) {
       console.error('Failed to add split expense:', err);
+      setExpenseError('Network error — please check your connection and try again.');
+    } finally {
+      setIsSubmittingExpense(false);
     }
   };
 
@@ -383,11 +417,17 @@ export default function SplitPage() {
             <p className="text-[11px] text-neutral-400 mt-1">At least 2 members are required to split expenses.</p>
           </div>
 
+          {groupError && (
+            <p role="alert" className="rounded-xl bg-[var(--danger-bg)] px-3.5 py-2.5 text-xs text-[var(--danger)]">
+              {groupError}
+            </p>
+          )}
+
           <div className="flex justify-end gap-2.5 pt-2">
             <Button type="button" variant="secondary" onClick={() => setIsNewGroupOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create Group</Button>
+            <Button type="submit" isLoading={isSubmittingGroup}>Create Group</Button>
           </div>
         </form>
       </Modal>
@@ -410,7 +450,7 @@ export default function SplitPage() {
             />
 
             <Input
-              label="Total Amount (INR)"
+              label={`Total Amount (${currency})`}
               type="number"
               step="0.01"
               placeholder="0.00"
@@ -443,11 +483,17 @@ export default function SplitPage() {
               each).
             </div>
 
+            {expenseError && (
+              <p role="alert" className="rounded-xl bg-[var(--danger-bg)] px-3.5 py-2.5 text-xs text-[var(--danger)]">
+                {expenseError}
+              </p>
+            )}
+
             <div className="flex justify-end gap-2.5 pt-2">
               <Button type="button" variant="secondary" onClick={() => setIsAddExpenseOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Record Expense</Button>
+              <Button type="submit" isLoading={isSubmittingExpense}>Record Expense</Button>
             </div>
           </form>
         </Modal>

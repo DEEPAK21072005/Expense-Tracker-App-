@@ -5,13 +5,13 @@
   <br />
   <img src="public/icon-192.png" alt="Expense Tracker Pro Icon" width="80" height="80" style="border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);" />
   <br />
-  <h3>Executive-Grade Personal Finance & Expense Intelligence</h3>
+  <h3>Production-Grade Personal Finance & Expense Intelligence</h3>
   <p>
     <b>Next.js 15 App Router</b> • <b>React 19</b> • <b>TypeScript</b> • <b>Tailwind CSS v4</b> • <b>Prisma ORM</b> • <b>pdf-lib Vector Reports</b>
   </p>
   <p>
     <a href="https://expense-tracker-pro-lime.vercel.app"><img src="https://img.shields.io/badge/Live%20Production-Vercel%20Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Deployment"/></a>
-    <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDEEPAK21072005%2FExpense-Tracker-App-"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
+    <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDEEPAK21072005%2Fexpense-tracker-pro"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
   </p>
   <p>
     🌐 <b>Live Web Application:</b> <a href="https://expense-tracker-pro-lime.vercel.app"><b>https://expense-tracker-pro-lime.vercel.app</b></a>
@@ -22,7 +22,7 @@
 
 ## 🌟 Executive Summary & Transformation Overview
 
-This repository has been comprehensively modernized from a legacy static prototype (`index.html` + unstyled CDN `jspdf`) into an executive-grade personal finance application adhering to the deep research architecture specification.
+This repository has been comprehensively modernized from a legacy static prototype (`index.html` + unstyled CDN `jspdf`) into a production-grade personal finance application adhering to the deep research architecture specification.
 
 ### Before vs. After Modernization
 
@@ -31,7 +31,7 @@ This repository has been comprehensively modernized from a legacy static prototy
 | **Architecture** | Static vanilla HTML/JS single-page file (`index.html`) | Full-stack Next.js App Router (v15) with TypeScript and Route Handlers |
 | **Styling & Theme** | Rigid 3-color linear gradient, unstyled HTML inputs | Tailored Tailwind CSS v4 design system ("Asian Apple" minimalism, WCAG 2.2 AA light/dark modes) |
 | **Money Handling** | Floating-point `parseFloat()` prone to JS precision bugs | Integer minor-unit arithmetic (`amountMinor`), zero floating-point ledger rounding loss |
-| **PDF Reporting** | Hardcoded CDN `jspdf` text dump with `yOffset += 10`, clipping at &gt;10 records | Pure vector `pdf-lib` engine with executive summary cards, category distributions, budget variance, and multi-page paginated transaction ledgers with repeated table headers |
+| **PDF Reporting** | Hardcoded CDN `jspdf` text dump with `yOffset += 10`, clipping at &gt;10 records | Pure vector `pdf-lib` engine with high-level financial summary cards, category distributions, budget variance, and multi-page paginated transaction ledgers with repeated table headers |
 | **Persistence** | Unstructured `localStorage` keyed by single date strings (`YYYY-MM-DD`) | Normalized relational database via Prisma ORM (SQLite for instant zero-config local run, Postgres compatible) |
 | **Bill Splitting** | Rudimentary comma-separated member split | Multi-member group expense splitter with exact cent allocation and greedy debt minimization graph ("who owes whom") |
 | **Quick Entry** | Manual input fields with inline `onclick` handlers | Assistive natural-language quick entry ("₹450 dinner at Seoul Kitchen yesterday") with interactive confirmation |
@@ -138,7 +138,7 @@ npm start
 - **Clean Slate Guarantee**: Strictly zero pre-populated mock transactions, fake balances, or dummy people. New users start fresh with initial category templates and zero transaction clutter.
 - **Dynamic Multi-Currency**: Select your base currency (`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `SGD`) upon signup; all dashboards, budgets, reports, and bill splits dynamically adapt.
 
-### 1. Executive Financial Dashboard (`/`)
+### 1. Comprehensive Financial Dashboard (`/`)
 - Total Net Worth aggregated across all Cash, Bank, Savings, and Credit accounts.
 - Month-to-date Income, Expenses, Net Cash Flow, and Savings Rate (%).
 - Category spending distribution with visual progress indicators.
@@ -166,11 +166,11 @@ npm start
 - Supports equal and custom exact shares with zero-remainder integer allocation.
 - Computes automated settlement transactions ("who owes whom") using a greedy debt minimization algorithm.
 
-### 5. Executive Monthly PDF Statements (`/reports`)
+### 5. Professional Monthly PDF Statements (`/reports`)
 - Select any Month and Year.
 - Generates professional vector PDFs via `/api/reports/pdf`:
   - Organization and user header with generation timestamp.
-  - 4 Executive financial KPI cards.
+  - 4 Financial KPI summary cards.
   - Category spending breakdown table.
   - Budget variance performance table.
   - Paginated transaction ledger with repeated table headers, alternating row colors, and `Page X of Total` footers.
@@ -196,4 +196,4 @@ npm start
 ---
 
 ## 📄 License
-MIT License - see [LICENSE](file:///c:/Users/polis/OneDrive/Desktop/Personal/.vscode/EXPENSE-TRACKER-APP&WEB%20PAGE/LICENSE) for details.
+MIT License - see [LICENSE](./LICENSE) for details.

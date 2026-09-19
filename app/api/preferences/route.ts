@@ -3,6 +3,12 @@ import { getCurrentUser, publicUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { SUPPORTED_CURRENCIES } from '@/lib/money';
 
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+  return NextResponse.json({ success: true, data: publicUser(user) });
+}
+
 export async function PATCH(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });

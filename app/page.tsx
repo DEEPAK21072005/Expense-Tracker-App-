@@ -146,16 +146,39 @@ export default function DashboardPage() {
     }
   };
 
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const response = await fetch(`/api/reports/pdf?month=${currentMonth}&year=${currentYear}`);
+      if (!response.ok) throw new Error('Failed to generate report');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `expense-statement-${currentYear}-${String(currentMonth).padStart(2, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('PDF download error:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Header section */}
+    <div className="space-y-6">
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
-            Financial Overview
+            Financial Dashboard
           </h1>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            {new Date().toLocaleDateString('en-US', {
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            {now.toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
@@ -165,12 +188,16 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Link href={`/api/reports/pdf?month=${currentMonth}&year=${currentYear}`} target="_blank">
-            <Button variant="outline" size="sm" className="gap-2">
-              <FileDown className="h-4 w-4" />
-              Download Monthly Statement (PDF)
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPdf}
+            isLoading={isDownloadingPdf}
+            className="gap-2"
+          >
+            <FileDown className="h-4 w-4" />
+            Download Monthly Statement (PDF)
+          </Button>
         </div>
       </div>
 

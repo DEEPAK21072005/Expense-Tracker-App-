@@ -54,16 +54,14 @@ export default function BudgetsPage() {
       if (cRes.success) {
         const expenseCats = cRes.data.filter((c: { type: string }) => c.type === 'EXPENSE');
         setCategories(expenseCats);
-        // Only set the initial selected category once to avoid infinite re-render
-        if (expenseCats.length > 0 && !catInitialised.current) {
-          catInitialised.current = true;
-          setSelectedCatId(expenseCats[0].id);
+        if (expenseCats.length > 0) {
+          setSelectedCatId((prev) => (prev && expenseCats.some((c: { id: string }) => c.id === prev) ? prev : expenseCats[0].id));
         }
       }
     } catch (err) {
       console.error('Failed to load budgets:', err);
     }
-  }, [month, year]); // ← removed selectedCatId from deps to break the infinite loop
+  }, [month, year]);
 
   useEffect(() => {
     loadBudgets();
@@ -78,15 +76,21 @@ export default function BudgetsPage() {
       return;
     }
 
+    const targetCatId = selectedCatId || (categories.length > 0 ? categories[0].id : null);
+    if (!targetCatId) {
+      setSaveError('Please select a category for this budget.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch('/api/budgets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          categoryId: selectedCatId || null,
+          categoryId: targetCatId,
           amount: parsedAmount,
-          currency,          // ← was missing — caused silent 422 failures
+          currency,
           month,
           year,
         }),

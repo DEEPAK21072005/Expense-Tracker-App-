@@ -10,7 +10,19 @@ function serialize(account: { balanceMinor: number; currency: string }) { return
 export async function GET() {
   const user = await getCurrentUser(); if (!user) return unauthorized();
   try {
-    const accounts = await prisma.account.findMany({ where: { userId: user.id }, orderBy: [{ isArchived: 'asc' }, { createdAt: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    let accounts = await prisma.account.findMany({ where: { userId: user.id }, orderBy: [{ isArchived: 'asc' }, { createdAt: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    if (accounts.length === 0) {
+      await prisma.account.create({
+        data: {
+          userId: user.id,
+          name: 'Primary Account',
+          type: 'BANK',
+          currency: user.baseCurrency,
+          balanceMinor: 0,
+        },
+      });
+      accounts = await prisma.account.findMany({ where: { userId: user.id }, orderBy: [{ isArchived: 'asc' }, { createdAt: 'asc' }], include: { _count: { select: { transactions: true } } } });
+    }
     return NextResponse.json({ success: true, data: accounts.map(serialize) });
   } catch (error) { console.error('Accounts query failed', error); return NextResponse.json({ success: false, error: 'Unable to load accounts' }, { status: 500 }); }
 }

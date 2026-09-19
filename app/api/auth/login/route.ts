@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
     if (!user || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) return NextResponse.json({ success: false, error: 'Incorrect email address or password' }, { status: 401 });
     const response = NextResponse.json({ success: true, data: publicUser(user) });
-    await createSession(user.id, response);
+    await createSession(user, response);
     return response;
   } catch (error) {
     console.error('Login failed', error);

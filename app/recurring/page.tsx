@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -50,11 +51,10 @@ export default function RecurringPage() {
       if (meRes.success && meRes.data?.baseCurrency) setCurrency(meRes.data.baseCurrency);
       if (aRes.success && aRes.data.length > 0) {
         setAccounts(aRes.data);
-        setAccountId(aRes.data[0].id);
+        setAccountId((prev) => (prev && aRes.data.some((a: { id: string }) => a.id === prev) ? prev : aRes.data[0].id));
       }
       if (cRes.success && cRes.data.length > 0) {
         setCategories(cRes.data);
-        setCategoryId(cRes.data[0].id);
       }
     } catch (err) {
       console.error('Failed to load recurring data:', err);
@@ -79,12 +79,18 @@ export default function RecurringPage() {
     setSaveError('');
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert('Please enter a valid amount.');
+      setSaveError('Please enter a valid amount greater than zero.');
+      return;
+    }
+
+    const effectiveAccountId = accountId || (accounts.length > 0 ? accounts[0].id : '');
+    if (!effectiveAccountId) {
+      setSaveError('Please select or create a payment account first.');
       return;
     }
 
     setIsLoading(true);
-    const selectedAcc = accounts.find((a) => a.id === accountId);
+    const selectedAcc = accounts.find((a) => a.id === effectiveAccountId);
     const activeCurrency = selectedAcc?.currency || currency;
 
     try {
@@ -97,7 +103,7 @@ export default function RecurringPage() {
           currency: activeCurrency,
           frequency,
           nextDate,
-          accountId,
+          accountId: effectiveAccountId,
           categoryId: categoryId || null,
         }),
       });
@@ -271,8 +277,35 @@ export default function RecurringPage() {
 
             <div>
               <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-                Payment Account
+                Category
               </label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-blue-500 focus:outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+              >
+                <option value="">None / General</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              Payment Account
+            </label>
+            {accounts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-neutral-300 p-2.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+                No accounts found.{' '}
+                <Link href="/accounts" className="text-blue-600 dark:text-blue-400 underline font-medium">
+                  Add an account first &rarr;
+                </Link>
+              </div>
+            ) : (
               <select
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
@@ -281,11 +314,11 @@ export default function RecurringPage() {
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name} ({a.currency || currency})
                   </option>
                 ))}
               </select>
-            </div>
+            )}
           </div>
 
           {saveError && (

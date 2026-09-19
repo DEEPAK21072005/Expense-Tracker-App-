@@ -381,47 +381,58 @@ export async function generateExecutiveMonthlyPdf(data: MonthlyReportData): Prom
   y -= 16;
   drawTransactionTableHeader();
 
-  data.transactions.forEach((tx, idx) => {
-    checkOrAddPage(18);
-    const rowHeight = 18;
-    if (idx % 2 === 1) {
-      currentPage.drawRectangle({
-        x: MARGIN,
-        y: y - rowHeight,
-        width: CONTENT_WIDTH,
-        height: rowHeight,
-        color: zebraBg,
-      });
-    }
-
-    const dStr = typeof tx.date === 'string' ? tx.date.split('T')[0] : tx.date.toISOString().split('T')[0];
-    currentPage.drawText(dStr, { x: MARGIN + 8, y: y - 13, size: 8, font: fontRegular, color: mutedText });
-
-    // Truncate long payee name if needed
-    const payeeClean = tx.payee.length > 28 ? `${tx.payee.substring(0, 26)}...` : tx.payee;
-    currentPage.drawText(payeeClean, { x: MARGIN + 80, y: y - 13, size: 8, font: fontRegular, color: darkNavy });
-
-    const catClean = tx.category.length > 18 ? `${tx.category.substring(0, 16)}...` : tx.category;
-    currentPage.drawText(catClean, { x: MARGIN + 250, y: y - 13, size: 8, font: fontRegular, color: mutedText });
-
-    const accClean = tx.account.length > 16 ? `${tx.account.substring(0, 14)}...` : tx.account;
-    currentPage.drawText(accClean, { x: MARGIN + 370, y: y - 13, size: 8, font: fontRegular, color: mutedText });
-
-    const isExp = tx.type === 'EXPENSE';
-    const amtColor = isExp ? coralRed : emeraldGreen;
-    const prefix = isExp ? '-' : '+';
-    const formatted = `${prefix}${formatPdfCurrency(tx.amount, data.currency)}`;
-
-    currentPage.drawText(formatted, {
-      x: PAGE_WIDTH - MARGIN - 80,
+  if (data.transactions.length === 0) {
+    currentPage.drawText('No transactions recorded for this billing period.', {
+      x: MARGIN + 8,
       y: y - 13,
-      size: 8,
-      font: fontBold,
-      color: amtColor,
+      size: 9,
+      font: fontRegular,
+      color: mutedText,
     });
+    y -= 18;
+  } else {
+    data.transactions.forEach((tx, idx) => {
+      checkOrAddPage(18);
+      const rowHeight = 18;
+      if (idx % 2 === 1) {
+        currentPage.drawRectangle({
+          x: MARGIN,
+          y: y - rowHeight,
+          width: CONTENT_WIDTH,
+          height: rowHeight,
+          color: zebraBg,
+        });
+      }
 
-    y -= rowHeight;
-  });
+      const dStr = typeof tx.date === 'string' ? tx.date.split('T')[0] : tx.date.toISOString().split('T')[0];
+      currentPage.drawText(dStr, { x: MARGIN + 8, y: y - 13, size: 8, font: fontRegular, color: mutedText });
+
+      // Truncate long payee name if needed
+      const payeeClean = tx.payee.length > 28 ? `${tx.payee.substring(0, 26)}...` : tx.payee;
+      currentPage.drawText(payeeClean, { x: MARGIN + 80, y: y - 13, size: 8, font: fontRegular, color: darkNavy });
+
+      const catClean = tx.category.length > 18 ? `${tx.category.substring(0, 16)}...` : tx.category;
+      currentPage.drawText(catClean, { x: MARGIN + 250, y: y - 13, size: 8, font: fontRegular, color: mutedText });
+
+      const accClean = tx.account.length > 16 ? `${tx.account.substring(0, 14)}...` : tx.account;
+      currentPage.drawText(accClean, { x: MARGIN + 370, y: y - 13, size: 8, font: fontRegular, color: mutedText });
+
+      const isExp = tx.type === 'EXPENSE';
+      const amtColor = isExp ? coralRed : emeraldGreen;
+      const prefix = isExp ? '-' : '+';
+      const formatted = `${prefix}${formatPdfCurrency(tx.amount, data.currency)}`;
+
+      currentPage.drawText(formatted, {
+        x: PAGE_WIDTH - MARGIN - 80,
+        y: y - 13,
+        size: 8,
+        font: fontBold,
+        color: amtColor,
+      });
+
+      y -= rowHeight;
+    });
+  }
 
   return await pdfDoc.save();
 }

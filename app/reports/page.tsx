@@ -97,7 +97,35 @@ export default function ReportsPage() {
     loadReportData();
   }, [loadReportData]);
 
-  const pdfDownloadUrl = `/api/reports/pdf?month=${month}&year=${year}`;
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    setDownloadError('');
+    try {
+      const response = await fetch(`/api/reports/pdf?month=${month}&year=${year}`);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => null);
+        throw new Error(errorJson?.error || `Failed to generate PDF (${response.status})`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `expense-statement-${year}-${String(month).padStart(2, '0')}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      anchor.remove();
+    } catch (err: unknown) {
+      console.error('PDF download error:', err);
+      const msg = err instanceof Error ? err.message : 'Unable to download statement. Please try again.';
+      setDownloadError(msg);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -140,14 +168,18 @@ export default function ReportsPage() {
             ))}
           </select>
 
-          <a href={pdfDownloadUrl} target="_blank" rel="noopener noreferrer">
-            <Button size="sm" className="gap-1.5 shadow-sm">
-              <Download className="h-4 w-4" />
-              Download PDF
-            </Button>
-          </a>
+          <Button size="sm" onClick={handleDownload} isLoading={isDownloading} className="gap-1.5 shadow-sm">
+            <Download className="h-4 w-4" />
+            Download PDF
+          </Button>
         </div>
       </div>
+
+      {downloadError && (
+        <div role="alert" className="rounded-xl bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+          {downloadError}
+        </div>
+      )}
 
       {/* Report Summary Card */}
       {stats ? (
@@ -221,12 +253,10 @@ export default function ReportsPage() {
           </ul>
 
           <div className="pt-2">
-            <a href={pdfDownloadUrl} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" variant="primary" className="gap-2">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open Report in New Tab
-              </Button>
-            </a>
+            <Button size="sm" variant="primary" onClick={handleDownload} isLoading={isDownloading} className="gap-2">
+              <Download className="h-3.5 w-3.5" />
+              Download Executive Statement
+            </Button>
           </div>
         </Card>
 
