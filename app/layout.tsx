@@ -13,8 +13,10 @@ export const viewport: Viewport = {
   ],
 };
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://expense-tracker-pro.onrender.com';
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://expense-tracker-pro-lime.vercel.app'),
+  metadataBase: new URL(appUrl),
   title: 'Expense Tracker Pro | Private Personal Finance',
   description:
     'A private, account-based personal-finance tracker with accurate money handling and clear monthly reports.',
@@ -44,11 +46,11 @@ export const metadata: Metadata = {
     title: 'Expense Tracker Pro | Private Personal Finance',
     description:
       'Private personal finance, multi-account tracking, budgeting, and monthly reports.',
-    url: 'https://expense-tracker-pro-lime.vercel.app',
+    url: appUrl,
     siteName: 'Expense Tracker Pro',
     images: [
       {
-        url: '/og-image.png',
+        url: '/thumbnail.png',
         width: 1200,
         height: 630,
         alt: 'Expense Tracker Pro Preview',

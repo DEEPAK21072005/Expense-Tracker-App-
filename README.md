@@ -10,12 +10,11 @@
     <b>Next.js 15 App Router</b> • <b>React 19</b> • <b>TypeScript</b> • <b>Tailwind CSS v4</b> • <b>Prisma ORM</b> • <b>pdf-lib Vector Reports</b>
   </p>
   <p>
-    <a href="https://expense-tracker-pro-lime.vercel.app"><img src="https://img.shields.io/badge/Live%20Production-Vercel%20Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Deployment"/></a>
-    <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDEEPAK21072005%2Fexpense-tracker-pro"><img src="https://vercel.com/button" alt="Deploy with Vercel"/></a>
+    <a href="https://expense-tracker-pro.onrender.com"><img src="https://img.shields.io/badge/Live%20Production-Render%20Deployed-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Live Deployment"/></a>
     <a href="https://render.com/deploy?repo=https://github.com/DEEPAK21072005/Expense-Tracker-App-"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"/></a>
   </p>
   <p>
-    🌐 <b>Live Web Application:</b> <a href="https://expense-tracker-pro-lime.vercel.app"><b>https://expense-tracker-pro-lime.vercel.app</b></a>
+    🌐 <b>Live Web Application:</b> <a href="https://expense-tracker-pro.onrender.com"><b>https://expense-tracker-pro.onrender.com</b></a>
   </p>
 </div>
 
