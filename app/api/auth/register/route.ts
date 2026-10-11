@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    const message = error instanceof Error ? error.message : 'Unable to create your account';
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: process.env.NODE_ENV === 'development' ? message : 'Unable to create your account. Please try again.' },
+      { success: false, error: 'Unable to create your account. Please try again.', details: message },
       { status: 500 }
     );
   }
