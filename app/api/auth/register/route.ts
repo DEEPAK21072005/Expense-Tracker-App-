@@ -1,7 +1,15 @@
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createSession, DEFAULT_CATEGORIES, publicUser, syncVaultUserToDb } from '@/lib/auth';
+import {
+  attachLedgerSyncCookie,
+  createSession,
+  deterministicCuid,
+  getDefaultAccountData,
+  getDefaultCategoriesData,
+  publicUser,
+  syncVaultUserToDb,
+} from '@/lib/auth';
 import { RegisterInputSchema } from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
@@ -30,30 +38,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userId = deterministicCuid(email, 'user');
     const user = await prisma.user.create({
       data: {
+        id: userId,
         name: parsed.data.name,
         email,
         baseCurrency: parsed.data.baseCurrency,
         passwordHash: await bcrypt.hash(parsed.data.password, 10),
         categories: {
-          create: DEFAULT_CATEGORIES,
+          create: getDefaultCategoriesData(userId),
         },
         accounts: {
-          create: [
-            {
-              name: 'Primary Account',
-              type: 'BANK',
-              currency: parsed.data.baseCurrency,
-              balanceMinor: 0,
-            },
-          ],
+          create: [getDefaultAccountData(userId, parsed.data.baseCurrency)],
         },
       },
     });
 
     const response = NextResponse.json({ success: true, data: publicUser(user) }, { status: 201 });
     await createSession(user, response);
+    await attachLedgerSyncCookie(user.id, response);
     return response;
   } catch (error: unknown) {
     console.error('Registration failed:', error);

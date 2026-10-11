@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { attachLedgerSyncCookie, getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { fromMinorUnits } from '@/lib/money';
 import { BudgetInputSchema } from '@/lib/validation';
@@ -37,10 +37,19 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid budget' }, { status: 400 });
     const input = parsed.data as typeof parsed.data & { amountMinor: number };
     if (input.currency !== user.baseCurrency) return NextResponse.json({ success: false, error: `Budgets use your base currency (${user.baseCurrency})` }, { status: 422 });
-    if (input.categoryId && !await prisma.category.findFirst({ where: { id: input.categoryId, userId: user.id, type: 'EXPENSE' } })) return NextResponse.json({ success: false, error: 'The selected category is unavailable' }, { status: 422 });
+    let resolvedCategoryId: string | null = null;
+    if (input.categoryId) {
+      let category = await prisma.category.findFirst({ where: { id: input.categoryId, userId: user.id, type: 'EXPENSE' } });
+      if (!category) category = await prisma.category.findFirst({ where: { userId: user.id, type: 'EXPENSE' }, orderBy: { createdAt: 'asc' } });
+      if (!category) return NextResponse.json({ success: false, error: 'The selected category is unavailable' }, { status: 422 });
+      resolvedCategoryId = category.id;
+    }
     const now = new Date(); const month = input.month ?? now.getUTCMonth() + 1; const year = input.year ?? now.getUTCFullYear();
-    const existing = await prisma.budget.findFirst({ where: { userId: user.id, categoryId: input.categoryId ?? null, month, year } });
-    const budget = existing ? await prisma.budget.update({ where: { id: existing.id }, data: { amountMinor: input.amountMinor, alertThreshold: input.alertThreshold } }) : await prisma.budget.create({ data: { userId: user.id, categoryId: input.categoryId ?? null, amountMinor: input.amountMinor, period: 'MONTHLY', month, year, alertThreshold: input.alertThreshold } });
-    return NextResponse.json({ success: true, data: budget }, { status: existing ? 200 : 201 });
+    const existing = await prisma.budget.findFirst({ where: { userId: user.id, categoryId: resolvedCategoryId, month, year } });
+    const budget = existing ? await prisma.budget.update({ where: { id: existing.id }, data: { amountMinor: input.amountMinor, alertThreshold: input.alertThreshold } }) : await prisma.budget.create({ data: { userId: user.id, categoryId: resolvedCategoryId, amountMinor: input.amountMinor, period: 'MONTHLY', month, year, alertThreshold: input.alertThreshold } });
+    const response = NextResponse.json({ success: true, data: budget }, { status: existing ? 200 : 201 });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) { console.error('Budget save failed', error); return NextResponse.json({ success: false, error: 'Unable to save this budget' }, { status: 500 }); }
 }
+

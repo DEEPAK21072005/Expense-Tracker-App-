@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { attachLedgerSyncCookie, getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { calculateSettlements, distributeEqualMinorUnits, fromMinorUnits, parseAmountToMinor } from '@/lib/money';
 import { SplitExpenseInputSchema, SplitGroupInputSchema } from '@/lib/validation';
@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
       const uniqueMembers = [...new Set(parsed.data.members.map((name) => name.trim()))];
       if (uniqueMembers.length < 2) return NextResponse.json({ success: false, error: 'Use at least two different member names' }, { status: 400 });
       const group = await prisma.expenseSplitGroup.create({ data: { userId: user.id, name: parsed.data.name, description: parsed.data.description, members: { create: uniqueMembers.map((name) => ({ name })) } }, include: { members: true } });
-      return NextResponse.json({ success: true, data: group }, { status: 201 });
+      const response = NextResponse.json({ success: true, data: group }, { status: 201 });
+      await attachLedgerSyncCookie(user.id, response);
+      return response;
     }
     const parsed = SplitExpenseInputSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid split expense' }, { status: 400 });
@@ -52,9 +54,12 @@ export async function POST(request: NextRequest) {
       const created = await client.splitExpense.create({ data: { groupId: group.id, paidById: input.paidById, description: input.description, amountMinor, currency: input.currency, date: input.date, splitType: input.splitType, shares: { create: shares } }, include: { paidBy: true, shares: { include: { member: true } } } });
       await client.expenseSplitGroup.update({ where: { id: group.id }, data: { updatedAt: new Date() } }); return created;
     });
-    return NextResponse.json({ success: true, data: { ...expense, amount: fromMinorUnits(expense.amountMinor, expense.currency), shares: expense.shares.map((share) => ({ ...share, shareAmount: fromMinorUnits(share.shareMinor, expense.currency) })) } }, { status: 201 });
+    const response = NextResponse.json({ success: true, data: { ...expense, amount: fromMinorUnits(expense.amountMinor, expense.currency), shares: expense.shares.map((share) => ({ ...share, shareAmount: fromMinorUnits(share.shareMinor, expense.currency) })) } }, { status: 201 });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unique constraint')) return NextResponse.json({ success: false, error: 'A group with this name already exists' }, { status: 409 });
     console.error('Split save failed', error); return NextResponse.json({ success: false, error: 'Unable to save this split expense' }, { status: 500 });
   }
 }
+

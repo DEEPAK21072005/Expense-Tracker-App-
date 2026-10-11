@@ -31,4 +31,13 @@ describe('Natural Language Transaction Parsing Engine', () => {
     expect(result.categoryHint).toBe('Groceries');
     expect(result.payee).toContain('Whole Foods');
   });
+
+  it('extracts payee before preposition when category keyword follows "at"', () => {
+    const result = parseNaturalLanguageInput('Seoul at food 250');
+    expect(result.amount).toBe(250);
+    expect(result.type).toBe('EXPENSE');
+    expect(result.categoryHint).toBe('Food & Dining');
+    expect(result.payee).toBe('Seoul');
+  });
 });
+

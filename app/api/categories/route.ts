@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_CATEGORIES, getCurrentUser } from '@/lib/auth';
+import { attachLedgerSyncCookie, getCurrentUser, getDefaultCategoriesData } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { CategoryInputSchema } from '@/lib/validation';
 
@@ -11,7 +11,8 @@ export async function GET() {
     let categories = await prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ type: 'asc' }, { name: 'asc' }], include: { _count: { select: { transactions: true } } } });
     if (categories.length === 0) {
       await prisma.category.createMany({
-        data: DEFAULT_CATEGORIES.map((c) => ({
+        data: getDefaultCategoriesData(user.id).map((c) => ({
+          id: c.id,
           userId: user.id,
           name: c.name,
           type: c.type,
@@ -31,9 +32,12 @@ export async function POST(request: NextRequest) {
     const parsed = CategoryInputSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid category' }, { status: 400 });
     const category = await prisma.category.create({ data: { userId: user.id, ...parsed.data } });
-    return NextResponse.json({ success: true, data: category }, { status: 201 });
+    const response = NextResponse.json({ success: true, data: category }, { status: 201 });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unique constraint')) return NextResponse.json({ success: false, error: 'A category with this name already exists' }, { status: 409 });
     console.error('Category creation failed', error); return NextResponse.json({ success: false, error: 'Unable to create this category' }, { status: 500 });
   }
 }
+

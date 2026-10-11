@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { attachLedgerSyncCookie, getCurrentUser, getDefaultAccountData } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { fromMinorUnits, parseAmountToMinor } from '@/lib/money';
 import { TransactionInputSchema } from '@/lib/validation';
@@ -13,7 +13,18 @@ function serializeTransaction(transaction: TransactionWithRelations) { return { 
 function dateOnly(value: string, isEnd = false) { return new Date(`${value}T${isEnd ? '23:59:59.999' : '00:00:00.000'}Z`); }
 
 async function validateReferences(userId: string, input: { accountId: string; toAccountId?: string | null; categoryId?: string | null; currency: string; type: string }) {
-  const source = await prisma.account.findFirst({ where: { id: input.accountId, userId, isArchived: false } });
+  let source = await prisma.account.findFirst({ where: { id: input.accountId, userId, isArchived: false } });
+  if (!source) {
+    source = await prisma.account.findFirst({ where: { userId, isArchived: false, currency: input.currency }, orderBy: { createdAt: 'asc' } });
+    if (!source) {
+      const existingAny = await prisma.account.findFirst({ where: { userId, name: 'Primary Account' } });
+      if (!existingAny) {
+        source = await prisma.account.create({
+          data: { userId, ...getDefaultAccountData(userId, input.currency) },
+        });
+      }
+    }
+  }
   if (!source) return { error: 'The selected source account is unavailable' } as const;
   if (source.currency !== input.currency) return { error: 'Transaction currency must match the source account' } as const;
   let destination = null;
@@ -21,11 +32,16 @@ async function validateReferences(userId: string, input: { accountId: string; to
     destination = await prisma.account.findFirst({ where: { id: input.toAccountId ?? '', userId, isArchived: false } });
     if (!destination || destination.currency !== input.currency) return { error: 'Transfers require an owned destination account with the same currency' } as const;
   }
+  let resolvedCategoryId: string | null = null;
   if (input.type !== 'TRANSFER' && input.categoryId) {
-    const category = await prisma.category.findFirst({ where: { id: input.categoryId, userId, type: input.type } });
+    let category = await prisma.category.findFirst({ where: { id: input.categoryId, userId, type: input.type } });
+    if (!category) {
+      category = await prisma.category.findFirst({ where: { userId, type: input.type }, orderBy: { createdAt: 'asc' } });
+    }
     if (!category) return { error: 'The selected category is unavailable' } as const;
+    resolvedCategoryId = category.id;
   }
-  return { source, destination } as const;
+  return { source, destination, resolvedCategoryId } as const;
 }
 
 async function applyBalanceChange(client: Prisma.TransactionClient, transaction: { accountId: string; toAccountId: string | null; amountMinor: number; type: string }, direction: 1 | -1) {
@@ -64,10 +80,12 @@ export async function POST(request: NextRequest) {
     const references = await validateReferences(user.id, input);
     if ('error' in references) return NextResponse.json({ success: false, error: references.error }, { status: 422 });
     const transaction = await prisma.$transaction(async (client) => {
-      const created = await client.transaction.create({ data: { userId: user.id, accountId: input.accountId, toAccountId: input.type === 'TRANSFER' ? input.toAccountId : null, categoryId: input.type === 'TRANSFER' ? null : input.categoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
+      const created = await client.transaction.create({ data: { userId: user.id, accountId: references.source.id, toAccountId: input.type === 'TRANSFER' ? references.destination?.id ?? null : null, categoryId: input.type === 'TRANSFER' ? null : references.resolvedCategoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
       await applyBalanceChange(client, created, 1); return created;
     });
-    return NextResponse.json({ success: true, data: serializeTransaction(transaction) }, { status: 201 });
+    const response = NextResponse.json({ success: true, data: serializeTransaction(transaction) }, { status: 201 });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) {
     console.error('Transaction creation failed', error);
     return NextResponse.json({ success: false, error: 'Unable to save this transaction' }, { status: 500 });
@@ -88,10 +106,12 @@ export async function PATCH(request: NextRequest) {
     if ('error' in references) return NextResponse.json({ success: false, error: references.error }, { status: 422 });
     const updated = await prisma.$transaction(async (client) => {
       await applyBalanceChange(client, current, -1);
-      const record = await client.transaction.update({ where: { id }, data: { accountId: input.accountId, toAccountId: input.type === 'TRANSFER' ? input.toAccountId : null, categoryId: input.type === 'TRANSFER' ? null : input.categoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
+      const record = await client.transaction.update({ where: { id }, data: { accountId: references.source.id, toAccountId: input.type === 'TRANSFER' ? references.destination?.id ?? null : null, categoryId: input.type === 'TRANSFER' ? null : references.resolvedCategoryId, amountMinor, currency: input.currency, type: input.type, date: input.date, payee: input.payee || (input.type === 'TRANSFER' ? 'Account transfer' : null), notes: input.notes, tags: input.tags }, include: includes });
       await applyBalanceChange(client, record, 1); return record;
     });
-    return NextResponse.json({ success: true, data: serializeTransaction(updated) });
+    const response = NextResponse.json({ success: true, data: serializeTransaction(updated) });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) {
     console.error('Transaction update failed', error);
     return NextResponse.json({ success: false, error: 'Unable to update this transaction' }, { status: 500 });
@@ -106,9 +126,12 @@ export async function DELETE(request: NextRequest) {
     const current = await prisma.transaction.findFirst({ where: { id, userId: user.id } });
     if (!current) return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
     await prisma.$transaction(async (client) => { await applyBalanceChange(client, current, -1); await client.transaction.delete({ where: { id: current.id } }); });
-    return NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) {
     console.error('Transaction deletion failed', error);
     return NextResponse.json({ success: false, error: 'Unable to delete this transaction' }, { status: 500 });
   }
 }
+

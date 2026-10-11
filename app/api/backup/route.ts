@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { attachLedgerSyncCookie, getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 
 function unauthorized() { return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 }); }
@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
         await client.transaction.create({ data: { userId: user.id, accountId, toAccountId: type === 'TRANSFER' ? toAccountId : null, categoryId: type === 'TRANSFER' ? null : categoryId, amountMinor, currency, type, date, payee, notes: typeof item.notes === 'string' ? item.notes.slice(0, 2_000) : null, tags: typeof item.tags === 'string' ? item.tags.slice(0, 300) : null, isRecurring: item.isRecurring === true } }); imported += 1;
       }
     }, { timeout: 20_000 });
-    return NextResponse.json({ success: true, data: { imported, skipped } });
+    const response = NextResponse.json({ success: true, data: { imported, skipped } });
+    await attachLedgerSyncCookie(user.id, response);
+    return response;
   } catch (error) { console.error('Backup restore failed', error); return NextResponse.json({ success: false, error: 'This backup could not be imported. Your existing data was not changed.' }, { status: 400 }); }
 }
+

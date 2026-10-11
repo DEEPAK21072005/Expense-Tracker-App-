@@ -97,15 +97,19 @@ export function parseNaturalLanguageInput(
 
   // 6. Payee extraction (look for "at <Payee>" or "to <Payee>" or "from <Payee>")
   let payee = '';
+  const genericCategoryWord = /^(?:food|dinner|lunch|breakfast|coffee|groceries|grocery|shopping|entertainment|transport|bills|utilities|health|salary|income|expense)$/i;
   const atMatch = trimmed.match(/\b(?:at|to|from)\s+([A-Za-z0-9\s&'-]+?)(?:\s+(?:yesterday|today|tomorrow|on|\d|\$|₹|€)|$)/i);
-  if (atMatch && atMatch[1]) {
+  if (atMatch && atMatch[1] && !genericCategoryWord.test(atMatch[1].trim())) {
     payee = atMatch[1].trim();
   } else {
-    // If no explicit preposition, try removing amount, keywords, and currency
+    // If no explicit preposition or preposition was followed by a category keyword (e.g. "Seoul at food 250"),
+    // strip amount, prepositions, category keywords, dates, and currency
     let clean = trimmed
       .replace(/[₹$€£¥]/g, '')
-      .replace(/\b(?:yesterday|today|tomorrow|inr|usd|eur|gbp)\b/gi, '')
-      .replace(new RegExp(`\\b${amount}\\b`, 'g'), '')
+      .replace(/\b(?:yesterday|today|tomorrow|inr|usd|eur|gbp|at|to|from|for|on|in)\b/gi, ' ')
+      .replace(/\b(?:food|dinner|lunch|breakfast|groceries|grocery|salary|income)\b/gi, ' ')
+      .replace(new RegExp(`\\b${amount}\\b`, 'g'), ' ')
+      .replace(/\s+/g, ' ')
       .trim();
     if (clean.length > 0 && clean.length < 50) {
       payee = clean;
