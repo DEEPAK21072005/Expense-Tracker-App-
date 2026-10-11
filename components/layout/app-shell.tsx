@@ -9,7 +9,8 @@ import { QuickAddModal } from '../transactions/quick-add-modal';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const isAuthPage = pathname === '/login' || pathname === '/create-account';
+  const authPaths = ['/login', '/create-account', '/forgot-password', '/reset-password'];
+  const isAuthPage = authPaths.some((p) => pathname === p || pathname?.startsWith(p + '/'));
 
   // Global Keyboard shortcut: "n" or "Ctrl+K" / "Cmd+K" opens Quick Add
   useEffect(() => {

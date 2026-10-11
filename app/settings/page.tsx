@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Download, ShieldCheck, Upload, AlertCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Download, ShieldCheck, Upload, AlertCircle, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { SUPPORTED_CURRENCIES } from '@/lib/money';
@@ -23,6 +23,13 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Security & Password states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   const loadUser = useCallback(async () => {
     setIsLoading(true);
@@ -72,6 +79,50 @@ export default function SettingsPage() {
       setStatus({ kind: 'error', text: 'Network error. Please try again.' });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleChangePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordStatus(null);
+
+    if (!currentPassword) {
+      setPasswordStatus({ kind: 'error', text: 'Please enter your current password.' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordStatus({ kind: 'error', text: 'New password must be at least 8 characters long.' });
+      return;
+    }
+    if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setPasswordStatus({ kind: 'error', text: 'New password must contain both a letter and a number.' });
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordStatus({ kind: 'error', text: 'New password and confirmation password do not match.' });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setPasswordStatus({ kind: 'error', text: result.error ?? 'Failed to update password.' });
+        return;
+      }
+      setPasswordStatus({ kind: 'success', text: 'Your password was updated successfully.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch {
+      setPasswordStatus({ kind: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setIsChangingPassword(false);
     }
   }
 
@@ -223,6 +274,78 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Security & password</CardTitle>
+        </CardHeader>
+        <p className="text-sm leading-6 text-neutral-500 dark:text-neutral-400">
+          Update your account password. Choose a strong password containing at least 8 characters, a letter, and a number.
+        </p>
+
+        {passwordStatus && (
+          <div
+            role="status"
+            className={`mt-4 flex items-center gap-2 rounded-xl px-4 py-3 text-sm ${
+              passwordStatus.kind === 'success'
+                ? 'bg-[var(--income-bg)] text-[var(--income)]'
+                : 'bg-[var(--danger-bg)] text-[var(--danger)]'
+            }`}
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {passwordStatus.text}
+          </div>
+        )}
+
+        <form className="mt-4 space-y-4" onSubmit={handleChangePassword}>
+          <div>
+            <label className="block text-sm font-medium">
+              Current password
+              <input
+                type="password"
+                autoComplete="current-password"
+                className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)] dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              New password
+              <input
+                type="password"
+                autoComplete="new-password"
+                className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)] dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <span className="mt-1 block text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                At least 8 chars, letter & number
+              </span>
+            </label>
+
+            <label className="block text-sm font-medium">
+              Confirm new password
+              <input
+                type="password"
+                autoComplete="new-password"
+                className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--accent)] dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+
+          <Button type="submit" isLoading={isChangingPassword}>
+            Update password
+          </Button>
+        </form>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Private backup</CardTitle>
         </CardHeader>
         <p className="text-sm leading-6 text-neutral-500 dark:text-neutral-400">
@@ -242,6 +365,27 @@ export default function SettingsPage() {
           />
           <Button variant="outline" onClick={() => fileInput.current?.click()}>
             <Upload className="h-4 w-4 mr-1.5" /> Restore a backup
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="border-red-200/60 bg-red-50/30 dark:border-red-900/40 dark:bg-red-950/20">
+        <CardHeader>
+          <CardTitle className="text-red-700 dark:text-red-400">Account session</CardTitle>
+        </CardHeader>
+        <p className="text-sm leading-6 text-neutral-500 dark:text-neutral-400">
+          Sign out of your active session on this device. You will need your email and password to sign back in.
+        </p>
+        <div className="mt-4">
+          <Button
+            variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/60"
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              window.location.href = '/login';
+            }}
+          >
+            <LogOut className="h-4 w-4 mr-1.5" /> Sign out of account
           </Button>
         </div>
       </Card>

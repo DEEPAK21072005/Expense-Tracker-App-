@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, Plus, LogOut } from 'lucide-react';
 import { useTheme } from '../theme-provider';
@@ -37,10 +38,13 @@ export function Navbar({ onOpenQuickAdd }: NavbarProps) {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-85">
-            <img
+            <Image
               src="/icon-192.png"
               alt="Expense Tracker Pro Icon"
+              width={32}
+              height={32}
               className="h-8 w-8 rounded-xl object-cover shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+              priority
             />
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold tracking-tight text-[var(--text-main)]">

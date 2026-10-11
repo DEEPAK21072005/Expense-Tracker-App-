@@ -107,10 +107,15 @@ function parseToken(token: string): {
 }
 
 export function sessionCookieOptions(expiresAt: Date) {
-  const isVercelHttps = Boolean(process.env.VERCEL && process.env.VERCEL_ENV === 'production');
+  const isProd = process.env.NODE_ENV === 'production';
+  const isHttps = Boolean(
+    (process.env.VERCEL && process.env.VERCEL_ENV === 'production') ||
+    process.env.RENDER ||
+    (process.env.RENDER_EXTERNAL_URL && process.env.RENDER_EXTERNAL_URL.startsWith('https'))
+  );
   return {
     httpOnly: true,
-    secure: isVercelHttps,
+    secure: isProd && isHttps,
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
@@ -119,11 +124,31 @@ export function sessionCookieOptions(expiresAt: Date) {
 
 export async function createSession(
   userOrId: string | SessionUser,
-  response: NextResponse
+  response: NextResponse,
+  rememberMe: boolean = true
 ) {
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
-  const user: SessionUser =
-    typeof userOrId === 'string' ? { id: userOrId } : userOrId;
+  const maxAgeSeconds = rememberMe ? SESSION_MAX_AGE_SECONDS : 60 * 60 * 24; // 30 days vs 1 day
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
+  let user: SessionUser;
+  if (typeof userOrId === 'string') {
+    try {
+      const dbUser = await prisma.user.findUnique({ where: { id: userOrId } });
+      if (dbUser) {
+        user = {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          baseCurrency: dbUser.baseCurrency,
+        };
+      } else {
+        user = { id: userOrId };
+      }
+    } catch {
+      user = { id: userOrId };
+    }
+  } else {
+    user = userOrId;
+  }
   const token = createToken(user, expiresAt);
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
 }

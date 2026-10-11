@@ -10,7 +10,7 @@
     "dev": "node ./scripts/run-cli.js next dev",
     "build": "node ./scripts/switch-db.js && node ./scripts/run-cli.js prisma generate && node ./scripts/run-cli.js next build",
     "start": "node ./scripts/run-cli.js next start",
-    "lint": "eslint .",
+    "lint": "node ./scripts/run-cli.js eslint .",
     "typecheck": "node ./scripts/run-cli.js tsc --noEmit",
     "db:migrate": "node ./scripts/run-cli.js prisma migrate deploy",
     "test": "node ./scripts/run-cli.js vitest run",

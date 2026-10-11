@@ -8,13 +8,30 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const parsed = RegisterInputSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message ?? 'Invalid account details' }, { status: 400 });
-    const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-    if (existing) return NextResponse.json({ success: false, error: 'An account already exists for this email address' }, { status: 409 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid account details' },
+        { status: 400 }
+      );
+    }
+
+    const email = parsed.data.email.toLowerCase().trim();
+    let existing = await prisma.user.findUnique({ where: { email } });
+    if (!existing) {
+      const allUsers = await prisma.user.findMany({ select: { id: true, email: true } });
+      existing = (allUsers.find((u) => u.email.toLowerCase() === email) as any) || null;
+    }
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: 'An account already exists with this email address. Please sign in instead.' },
+        { status: 409 }
+      );
+    }
+
     const user = await prisma.user.create({
       data: {
         name: parsed.data.name,
-        email: parsed.data.email,
+        email,
         baseCurrency: parsed.data.baseCurrency,
         passwordHash: await bcrypt.hash(parsed.data.password, 12),
         categories: {
@@ -32,6 +49,7 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
     const response = NextResponse.json({ success: true, data: publicUser(user) }, { status: 201 });
     await createSession(user, response);
     return response;

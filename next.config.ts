@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/**': ['./prisma/template.db'],
   },
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
   async headers() {
     const headers = [
       { key: "X-Frame-Options", value: "DENY" },

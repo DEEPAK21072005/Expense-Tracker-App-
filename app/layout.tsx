@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AppShell } from '@/components/layout/app-shell';
+
+const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -93,14 +96,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Expense Pro" />
         <meta property="og:image" content="/thumbnail.png" />
         <meta name="twitter:image" content="/thumbnail.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
       </head>
-      <body className="font-sans antialiased selection:bg-blue-100 selection:text-blue-900 dark:selection:bg-blue-900/40 dark:selection:text-blue-200">
+      <body className={`${inter.className} font-sans antialiased selection:bg-blue-100 selection:text-blue-900 dark:selection:bg-blue-900/40 dark:selection:text-blue-200`}>
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>

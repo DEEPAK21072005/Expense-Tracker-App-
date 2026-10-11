@@ -4,7 +4,6 @@ import path from 'node:path';
 
 function ensureSqliteTables(filePath: string) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { DatabaseSync } = require('node:sqlite');
     const db = new DatabaseSync(filePath);
     db.exec(`

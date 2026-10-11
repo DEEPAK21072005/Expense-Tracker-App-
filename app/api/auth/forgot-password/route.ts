@@ -15,20 +15,30 @@ function hashToken(token: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const parsed = ForgotSchema.safeParse(await request.json());
+    const body = await request.json();
+    const parsed = ForgotSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ success: false, error: 'Enter a valid email address' }, { status: 400 });
     }
 
-    const { email } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    // Always return success to prevent email enumeration attacks
+    const email = parsed.data.email.toLowerCase().trim();
+    let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return NextResponse.json({ success: true, message: 'If an account exists, a reset link has been generated.' });
+      const allUsers = await prisma.user.findMany();
+      user = allUsers.find((u) => u.email.toLowerCase() === email) || null;
     }
 
-    // Generate a secure reset token
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'No account found with this email address. Please check your spelling or create an account.',
+        },
+        { status: 404 }
+      );
+    }
+
+    // Generate a cryptographically secure reset token
     const token = crypto.randomBytes(32).toString('base64url');
     const tokenHash = hashToken(token);
     const expiry = new Date(Date.now() + RESET_EXPIRY_MS);
@@ -41,16 +51,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Build the reset URL from the request origin
-    const origin = request.nextUrl.origin;
+    // Build the reset URL reliably using host header or origin
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+    const proto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '') || 'http';
+    const origin = `${proto}://${host}`;
     const resetUrl = `${origin}/reset-password?token=${token}`;
 
-    // Since this app has no email server, return the reset link directly.
-    // In production with an SMTP provider, you would email this link instead.
     return NextResponse.json({
       success: true,
       message: 'Password reset link generated successfully.',
       resetUrl,
+      token,
       expiresAt: expiry.toISOString(),
     });
   } catch (error) {

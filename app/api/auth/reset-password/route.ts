@@ -1,19 +1,9 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import prisma from '@/lib/db';
 import { createSession, publicUser } from '@/lib/auth';
-
-const ResetSchema = z.object({
-  token: z.string().min(1, 'Reset token is required'),
-  password: z
-    .string()
-    .min(10, 'Use at least 10 characters')
-    .max(128)
-    .regex(/[A-Za-z]/, 'Include a letter')
-    .regex(/\d/, 'Include a number'),
-});
+import { ResetPasswordSchema } from '@/lib/validation';
 
 function hashToken(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -21,25 +11,26 @@ function hashToken(token: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const parsed = ResetSchema.safeParse(await request.json());
+    const body = await request.json();
+    const parsed = ResetPasswordSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid request' },
+        { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid request details' },
         { status: 400 }
       );
     }
 
     const { token, password } = parsed.data;
-    const tokenHash = hashToken(token);
+    const cleanToken = token.trim();
+    const tokenHash = hashToken(cleanToken);
 
     const user = await prisma.user.findFirst({
       where: {
         passwordResetToken: tokenHash,
-        passwordResetExpiry: { gt: new Date() },
       },
     });
 
-    if (!user) {
+    if (!user || !user.passwordResetExpiry || new Date(user.passwordResetExpiry).getTime() < Date.now()) {
       return NextResponse.json(
         { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' },
         { status: 400 }
@@ -57,10 +48,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create a fresh session (old sessions are automatically invalidated because
-    // they are HMAC-signed stateless tokens — no session table to purge)
-    const response = NextResponse.json({ success: true, data: publicUser(updatedUser) });
-    await createSession(user.id, response);
+    // Create a fresh session with updatedUser (preserves email, name, baseCurrency)
+    const response = NextResponse.json({
+      success: true,
+      message: 'Password updated successfully.',
+      data: publicUser(updatedUser),
+    });
+    await createSession(updatedUser, response);
     return response;
   } catch (error) {
     console.error('Reset password failed', error);

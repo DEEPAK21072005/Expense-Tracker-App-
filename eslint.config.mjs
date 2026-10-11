@@ -3,7 +3,9 @@ import { globalIgnores } from 'eslint/config';
 
 const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 
-export default [
+const eslintConfig = [
   ...compat.extends('next/core-web-vitals'),
   globalIgnores(['.next/**', 'node_modules/**', 'legacy/**', 'prisma/migrations/**']),
 ];
+
+export default eslintConfig;

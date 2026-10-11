@@ -10,15 +10,26 @@ function amountForCurrency(value: string | number, currency: keyof typeof SUPPOR
 }
 
 export const RegisterInputSchema = z.object({
-  name: z.string().trim().min(2, 'Enter your name').max(80),
+  name: z.string().trim().min(2, 'Enter your name (at least 2 characters)').max(80),
   email: z.string().trim().email('Enter a valid email address').max(254).transform((value) => value.toLowerCase()),
-  password: z.string().min(10, 'Use at least 10 characters').max(128).regex(/[A-Za-z]/, 'Include a letter').regex(/\d/, 'Include a number'),
+  password: z.string().min(8, 'Use at least 8 characters').max(128).regex(/[A-Za-z]/, 'Include at least one letter').regex(/\d/, 'Include at least one number'),
   baseCurrency: currencySchema.default('INR'),
 });
 
 export const LoginInputSchema = z.object({
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
-  password: z.string().min(1).max(128),
+  email: z.string().trim().email('Enter a valid email address').max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(1, 'Password is required').max(128),
+  rememberMe: z.boolean().optional().default(true),
+});
+
+export const ResetPasswordSchema = z.object({
+  token: z.string().trim().min(1, 'Reset token is required'),
+  password: z.string().min(8, 'Use at least 8 characters').max(128).regex(/[A-Za-z]/, 'Include at least one letter').regex(/\d/, 'Include at least one number'),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'Use at least 8 characters').max(128).regex(/[A-Za-z]/, 'Include at least one letter').regex(/\d/, 'Include at least one number'),
 });
 
 export const TransactionInputSchema = z.object({
