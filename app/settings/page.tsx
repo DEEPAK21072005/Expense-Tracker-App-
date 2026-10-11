@@ -75,6 +75,7 @@ export default function SettingsPage() {
       }
       setUser(result.data);
       setStatus({ kind: 'success', text: 'Preferences saved successfully.' });
+      window.dispatchEvent(new Event('user-updated'));
     } catch {
       setStatus({ kind: 'error', text: 'Network error. Please try again.' });
     } finally {

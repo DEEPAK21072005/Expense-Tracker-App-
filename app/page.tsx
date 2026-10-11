@@ -449,6 +449,7 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/60">
                 {transactions.slice(0, 8).map((tx) => {
                   const isExp = tx.type === 'EXPENSE';
+                  const isTransfer = tx.type === 'TRANSFER';
                   return (
                     <tr key={tx.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors">
                       <td className="py-3 pl-2 text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
@@ -458,7 +459,7 @@ export default function DashboardPage() {
                         })}
                       </td>
                       <td className="py-3 font-medium text-neutral-900 dark:text-neutral-100">
-                        {tx.payee || (isExp ? 'Expense' : 'Income')}
+                        {tx.payee || (isTransfer ? 'Account transfer' : isExp ? 'Expense' : 'Income')}
                         {tx.notes ? (
                           <span className="block text-[10px] font-normal text-neutral-400 truncate max-w-xs">
                             {tx.notes}
@@ -470,6 +471,10 @@ export default function DashboardPage() {
                           <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
                             {tx.category.name}
                           </span>
+                        ) : isTransfer ? (
+                          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                            Transfer
+                          </span>
                         ) : (
                           <span className="text-neutral-400">-</span>
                         )}
@@ -478,8 +483,16 @@ export default function DashboardPage() {
                         {tx.account.name}
                       </td>
                       <td className="py-3 text-right font-semibold whitespace-nowrap num-tabular">
-                        <span className={isExp ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
-                          {isExp ? '-' : '+'}
+                        <span
+                          className={
+                            isTransfer
+                              ? 'text-blue-600 dark:text-blue-400'
+                              : isExp
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : 'text-emerald-600 dark:text-emerald-400'
+                          }
+                        >
+                          {isTransfer ? '' : isExp ? '-' : '+'}
                           {formatCurrency(tx.amount, tx.currency)}
                         </span>
                       </td>

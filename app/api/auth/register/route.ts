@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createSession, DEFAULT_CATEGORIES, publicUser } from '@/lib/auth';
+import { createSession, DEFAULT_CATEGORIES, publicUser, syncVaultUserToDb } from '@/lib/auth';
 import { RegisterInputSchema } from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
@@ -15,11 +15,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await syncVaultUserToDb();
+
     const email = parsed.data.email.toLowerCase().trim();
     let existing = await prisma.user.findUnique({ where: { email } });
     if (!existing) {
-      const allUsers = await prisma.user.findMany({ select: { id: true, email: true } });
-      existing = (allUsers.find((u) => u.email.toLowerCase() === email) as any) || null;
+      const allUsers = await prisma.user.findMany();
+      existing = allUsers.find((u) => u.email.toLowerCase() === email) || null;
     }
     if (existing) {
       return NextResponse.json(
@@ -53,9 +55,9 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true, data: publicUser(user) }, { status: 201 });
     await createSession(user, response);
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration failed:', error);
-    if (error?.code === 'P2002') {
+    if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'An account already exists with this email address. Please sign in instead.' },
         { status: 409 }

@@ -19,18 +19,22 @@ export function Navbar({ onOpenQuickAdd }: NavbarProps) {
   const [name, setName] = useState('');
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((response) => response.json())
-      .then((result) => {
-        if (result.success) setName(result.data.name);
-      })
-      .catch(() => undefined);
+    const loadMe = () => {
+      fetch('/api/auth/me')
+        .then((response) => response.json())
+        .then((result) => {
+          if (result.success) setName(result.data.name);
+        })
+        .catch(() => undefined);
+    };
+    loadMe();
+    window.addEventListener('user-updated', loadMe);
+    return () => window.removeEventListener('user-updated', loadMe);
   }, []);
 
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/login');
-    router.refresh();
+    window.location.href = '/login';
   }
 
   return (

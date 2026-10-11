@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createSession, publicUser } from '@/lib/auth';
+import { createSession, publicUser, syncVaultUserToDb } from '@/lib/auth';
 import { LoginInputSchema } from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await syncVaultUserToDb();
+
     const email = parsed.data.email.toLowerCase().trim();
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {

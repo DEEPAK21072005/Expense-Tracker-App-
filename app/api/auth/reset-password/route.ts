@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createSession, publicUser } from '@/lib/auth';
+import { createSession, DEFAULT_CATEGORIES, publicUser, syncVaultUserToDb, verifyPasswordResetToken } from '@/lib/auth';
 import { ResetPasswordSchema } from '@/lib/validation';
 
 function hashToken(token: string) {
@@ -20,17 +20,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await syncVaultUserToDb();
+
     const { token, password } = parsed.data;
     const cleanToken = token.trim();
     const tokenHash = hashToken(cleanToken);
 
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         passwordResetToken: tokenHash,
       },
     });
 
-    if (!user || !user.passwordResetExpiry || new Date(user.passwordResetExpiry).getTime() < Date.now()) {
+    const verifiedSigned = verifyPasswordResetToken(cleanToken);
+
+    if (user) {
+      if (!user.passwordResetExpiry || new Date(user.passwordResetExpiry).getTime() < Date.now()) {
+        return NextResponse.json(
+          { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' },
+          { status: 400 }
+        );
+      }
+    } else if (verifiedSigned) {
+      // Serverless cold-start fallback: token is cryptographically verified and unexpired
+      user = await prisma.user.findUnique({ where: { id: verifiedSigned.userId } });
+      if (!user) {
+        user = await prisma.user.findUnique({ where: { email: verifiedSigned.email.toLowerCase() } });
+      }
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            id: verifiedSigned.userId,
+            email: verifiedSigned.email.toLowerCase(),
+            name: verifiedSigned.name,
+            baseCurrency: verifiedSigned.baseCurrency,
+            passwordHash: '',
+            categories: {
+              create: DEFAULT_CATEGORIES,
+            },
+            accounts: {
+              create: [
+                {
+                  name: 'Primary Account',
+                  type: 'BANK',
+                  currency: verifiedSigned.baseCurrency,
+                  balanceMinor: 0,
+                },
+              ],
+            },
+          },
+        });
+      }
+    } else {
       return NextResponse.json(
         { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' },
         { status: 400 }
@@ -48,7 +89,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create a fresh session with updatedUser (preserves email, name, baseCurrency)
+    // Create a fresh session with updatedUser (preserves email, name, baseCurrency, and new passwordHash)
     const response = NextResponse.json({
       success: true,
       message: 'Password updated successfully.',

@@ -54,7 +54,8 @@ export function QuickAddModal({ isOpen, onClose, onSuccess }: QuickAddModalProps
         }
         if (catRes.success && catRes.data.length > 0) {
           setCategories(catRes.data);
-          setCategoryId(catRes.data[0].id);
+          const matching = catRes.data.find((c: { type: string }) => c.type === 'EXPENSE');
+          setCategoryId(matching ? matching.id : catRes.data[0].id);
         }
       });
     }
@@ -71,11 +72,12 @@ export function QuickAddModal({ isOpen, onClose, onSuccess }: QuickAddModalProps
       setPayee(parsed.payee);
       setDate(parsed.date);
 
-      // Match category hint if possible
-      const matchedCat = categories.find(
-        (c) => c.name.toLowerCase() === parsed.categoryHint.toLowerCase()
-      );
-      if (matchedCat) setCategoryId(matchedCat.id);
+      // Match category hint if possible, scoped to parsed.type
+      const matchedCat =
+        categories.find(
+          (c) => c.type === parsed.type && c.name.toLowerCase() === parsed.categoryHint.toLowerCase()
+        ) || categories.find((c) => c.type === parsed.type);
+      setCategoryId(matchedCat ? matchedCat.id : '');
     } else {
       setCandidate(null);
     }
@@ -113,8 +115,8 @@ export function QuickAddModal({ isOpen, onClose, onSuccess }: QuickAddModalProps
           type,
           date,
           accountId,
-          toAccountId: type === 'TRANSFER' ? toAccountId : null,
-          categoryId: type !== 'TRANSFER' ? categoryId : null,
+          toAccountId: type === 'TRANSFER' && toAccountId ? toAccountId : null,
+          categoryId: type !== 'TRANSFER' && categoryId ? categoryId : null,
           payee: payee.trim() || (type === 'INCOME' ? 'Income' : type === 'TRANSFER' ? 'Account transfer' : 'Expense'),
           notes: notes.trim() || undefined,
         }),
@@ -271,7 +273,16 @@ export function QuickAddModal({ isOpen, onClose, onSuccess }: QuickAddModalProps
                 </label>
                 <select
                   value={type}
-                  onChange={(e) => setType(e.target.value as 'EXPENSE' | 'INCOME' | 'TRANSFER')}
+                  onChange={(e) => {
+                    const newType = e.target.value as 'EXPENSE' | 'INCOME' | 'TRANSFER';
+                    setType(newType);
+                    if (newType === 'TRANSFER') {
+                      setCategoryId('');
+                    } else {
+                      const firstMatch = categories.find((c) => c.type === newType);
+                      setCategoryId(firstMatch ? firstMatch.id : '');
+                    }
+                  }}
                   className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
                 >
                   <option value="EXPENSE">Expense</option>

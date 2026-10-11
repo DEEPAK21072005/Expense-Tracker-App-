@@ -3,6 +3,7 @@ import { parseAmountToMinor, parseSignedAmountToMinor, SUPPORTED_CURRENCIES } fr
 
 const currencySchema = z.enum(['INR', 'USD', 'EUR', 'GBP', 'JPY', 'SGD', 'CAD', 'AUD']);
 const rawAmountSchema = z.union([z.string(), z.number().finite()]);
+const optionalCuid = z.preprocess((val) => (val === '' ? null : val), z.string().cuid().optional().nullable());
 
 function amountForCurrency(value: string | number, currency: keyof typeof SUPPORTED_CURRENCIES, context: z.RefinementCtx): number {
   try { return parseAmountToMinor(value, currency); }
@@ -38,8 +39,8 @@ export const TransactionInputSchema = z.object({
   type: z.enum(['EXPENSE', 'INCOME', 'TRANSFER']),
   date: z.coerce.date(),
   accountId: z.string().cuid(),
-  toAccountId: z.string().cuid().optional().nullable(),
-  categoryId: z.string().cuid().optional().nullable(),
+  toAccountId: optionalCuid,
+  categoryId: optionalCuid,
   payee: z.string().trim().max(140).optional().nullable(),
   notes: z.string().trim().max(2_000).optional().nullable(),
   tags: z.string().trim().max(300).optional().nullable(),
@@ -69,7 +70,7 @@ export const CategoryInputSchema = z.object({
 });
 
 export const BudgetInputSchema = z.object({
-  categoryId: z.string().cuid().optional().nullable(),
+  categoryId: optionalCuid,
   amount: rawAmountSchema,
   currency: currencySchema.default('INR'),
   period: z.literal('MONTHLY').default('MONTHLY'),
@@ -85,7 +86,7 @@ export const RecurringPaymentInputSchema = z.object({
   frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']),
   nextDate: z.coerce.date(),
   accountId: z.string().cuid(),
-  categoryId: z.string().cuid().optional().nullable(),
+  categoryId: optionalCuid,
 }).superRefine((value, context) => { (value as typeof value & { amountMinor: number }).amountMinor = amountForCurrency(value.amount, value.currency, context); });
 
 export const SplitGroupInputSchema = z.object({ name: z.string().trim().min(1).max(50), description: z.string().trim().max(200).optional().nullable(), members: z.array(z.string().trim().min(1).max(80)).min(2).max(30) });

@@ -4,7 +4,9 @@ import type { NextResponse } from 'next/server';
 import prisma from './db';
 
 export const SESSION_COOKIE = 'expense_tracker_session';
+export const VAULT_COOKIE = 'expense_tracker_vault';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const VAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 365; // 365 days
 
 export const DEFAULT_CATEGORIES = [
   { name: 'Food & Dining', type: 'EXPENSE', icon: 'utensils', color: '#f97316' },
@@ -25,6 +27,7 @@ export interface SessionUser {
   email?: string;
   name?: string;
   baseCurrency?: string;
+  passwordHash?: string;
 }
 
 function getSecret(): string {
@@ -42,6 +45,26 @@ function makeHmac(payload: string): string {
   return crypto.createHmac('sha256', getSecret()).update(payload).digest('hex');
 }
 
+function verifySignedPayload<T>(token: string): T | null {
+  const lastDot = token.lastIndexOf('.');
+  if (lastDot === -1) return null;
+
+  const payload = token.substring(0, lastDot);
+  const sig = token.substring(lastDot + 1);
+  const expectedSig = makeHmac(payload);
+
+  try {
+    const sigBuf = Buffer.from(sig, 'hex');
+    const expBuf = Buffer.from(expectedSig, 'hex');
+    if (sigBuf.length !== expBuf.length) return null;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+    const jsonStr = Buffer.from(payload, 'base64url').toString('utf8');
+    return JSON.parse(jsonStr) as T;
+  } catch {
+    return null;
+  }
+}
+
 function createToken(user: SessionUser, expiresAt: Date): string {
   const payload = Buffer.from(
     JSON.stringify({
@@ -49,6 +72,7 @@ function createToken(user: SessionUser, expiresAt: Date): string {
       email: user.email || '',
       name: user.name || '',
       baseCurrency: user.baseCurrency || 'INR',
+      ph: user.passwordHash || '',
       exp: expiresAt.getTime(),
     })
   ).toString('base64url');
@@ -60,6 +84,7 @@ function parseToken(token: string): {
   email?: string;
   name?: string;
   baseCurrency?: string;
+  passwordHash?: string;
   expiresAt: Date;
 } | null {
   const lastDot = token.lastIndexOf('.');
@@ -87,6 +112,7 @@ function parseToken(token: string): {
         email: data.email || undefined,
         name: data.name || undefined,
         baseCurrency: data.baseCurrency || 'INR',
+        passwordHash: data.ph || undefined,
         expiresAt: new Date(data.exp),
       };
     }
@@ -102,6 +128,49 @@ function parseToken(token: string): {
     return { userId, expiresAt: new Date(expiresAtMs) };
   }
   return null;
+}
+
+export function createPasswordResetToken(user: SessionUser, expiresAt: Date): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      purpose: 'pwd_reset',
+      userId: user.id,
+      email: user.email || '',
+      name: user.name || '',
+      baseCurrency: user.baseCurrency || 'INR',
+      exp: expiresAt.getTime(),
+      nonce: crypto.randomBytes(8).toString('hex'),
+    })
+  ).toString('base64url');
+  return `${payload}.${makeHmac(payload)}`;
+}
+
+export function verifyPasswordResetToken(token: string): {
+  userId: string;
+  email: string;
+  name: string;
+  baseCurrency: string;
+  expiresAt: Date;
+} | null {
+  const data = verifySignedPayload<{
+    purpose?: string;
+    userId?: string;
+    email?: string;
+    name?: string;
+    baseCurrency?: string;
+    exp?: number;
+  }>(token);
+  if (!data || data.purpose !== 'pwd_reset' || !data.userId || !data.email || !data.exp) {
+    return null;
+  }
+  if (data.exp < Date.now()) return null;
+  return {
+    userId: data.userId,
+    email: data.email,
+    name: data.name || 'User',
+    baseCurrency: data.baseCurrency || 'INR',
+    expiresAt: new Date(data.exp),
+  };
 }
 
 export function sessionCookieOptions(expiresAt: Date) {
@@ -137,6 +206,7 @@ export async function createSession(
           email: dbUser.email,
           name: dbUser.name,
           baseCurrency: dbUser.baseCurrency,
+          passwordHash: dbUser.passwordHash,
         };
       } else {
         user = { id: userOrId };
@@ -149,6 +219,66 @@ export async function createSession(
   }
   const token = createToken(user, expiresAt);
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
+
+  // Also persist an HMAC-signed account vault cookie so serverless cold starts after sign-out still recognize the user
+  if (user.email && user.name) {
+    const vaultExpiresAt = new Date(Date.now() + VAULT_MAX_AGE_SECONDS * 1000);
+    const vaultToken = createToken(user, vaultExpiresAt);
+    response.cookies.set(VAULT_COOKIE, vaultToken, sessionCookieOptions(vaultExpiresAt));
+  }
+}
+
+export async function syncVaultUserToDb() {
+  try {
+    const cookieStore = await cookies();
+    const vaultToken = cookieStore.get(VAULT_COOKIE)?.value || cookieStore.get(SESSION_COOKIE)?.value;
+    if (!vaultToken) return null;
+
+    const parsed = parseToken(vaultToken);
+    if (!parsed || !parsed.email || !parsed.name) return null;
+
+    let user = await prisma.user.findUnique({ where: { id: parsed.userId } });
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email: parsed.email.toLowerCase() } });
+    }
+
+    if (!user) {
+      try {
+        user = await prisma.user.create({
+          data: {
+            id: parsed.userId,
+            email: parsed.email.toLowerCase(),
+            name: parsed.name,
+            baseCurrency: parsed.baseCurrency || 'INR',
+            passwordHash: parsed.passwordHash || '',
+            categories: {
+              create: DEFAULT_CATEGORIES,
+            },
+            accounts: {
+              create: [
+                {
+                  name: 'Primary Account',
+                  type: 'BANK',
+                  currency: parsed.baseCurrency || 'INR',
+                  balanceMinor: 0,
+                },
+              ],
+            },
+          },
+        });
+      } catch {
+        user = await prisma.user.findUnique({ where: { email: parsed.email.toLowerCase() } });
+      }
+    } else if (!user.passwordHash && parsed.passwordHash) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: parsed.passwordHash },
+      });
+    }
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 export async function getCurrentUser() {
@@ -172,7 +302,7 @@ export async function getCurrentUser() {
             email: parsed.email,
             name: parsed.name,
             baseCurrency: parsed.baseCurrency || 'INR',
-            passwordHash: '', // Stateless HMAC session
+            passwordHash: parsed.passwordHash || '',
             categories: {
               create: DEFAULT_CATEGORIES,
             },
@@ -191,6 +321,15 @@ export async function getCurrentUser() {
       } catch {
         // In case of concurrent creation, fetch again
         user = await prisma.user.findUnique({ where: { id: parsed.userId } });
+      }
+    } else if (user && !user.passwordHash && parsed.passwordHash) {
+      try {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: parsed.passwordHash },
+        });
+      } catch {
+        // ignore concurrent update
       }
     }
 

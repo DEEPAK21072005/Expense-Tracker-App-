@@ -54,7 +54,7 @@ export default function RecurringPage() {
         setAccountId((prev) => (prev && aRes.data.some((a: { id: string }) => a.id === prev) ? prev : aRes.data[0].id));
       }
       if (cRes.success && cRes.data.length > 0) {
-        setCategories(cRes.data);
+        setCategories(cRes.data.filter((c: { type: string }) => c.type === 'EXPENSE'));
       }
     } catch (err) {
       console.error('Failed to load recurring data:', err);

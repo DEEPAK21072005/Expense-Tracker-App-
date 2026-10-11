@@ -418,8 +418,9 @@ export async function generateExecutiveMonthlyPdf(data: MonthlyReportData): Prom
       currentPage.drawText(accClean, { x: MARGIN + 370, y: y - 13, size: 8, font: fontRegular, color: mutedText });
 
       const isExp = tx.type === 'EXPENSE';
-      const amtColor = isExp ? coralRed : emeraldGreen;
-      const prefix = isExp ? '-' : '+';
+      const isTransfer = tx.type === 'TRANSFER';
+      const amtColor = isTransfer ? darkNavy : isExp ? coralRed : emeraldGreen;
+      const prefix = isTransfer ? '' : isExp ? '-' : '+';
       const formatted = `${prefix}${formatPdfCurrency(tx.amount, data.currency)}`;
 
       currentPage.drawText(formatted, {

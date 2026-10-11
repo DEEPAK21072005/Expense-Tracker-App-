@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/db';
+import { createPasswordResetToken, syncVaultUserToDb } from '@/lib/auth';
 
 const ForgotSchema = z.object({
   email: z.string().trim().email().max(254).transform((v) => v.toLowerCase()),
@@ -21,6 +22,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Enter a valid email address' }, { status: 400 });
     }
 
+    await syncVaultUserToDb();
+
     const email = parsed.data.email.toLowerCase().trim();
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -38,10 +41,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a cryptographically secure reset token
-    const token = crypto.randomBytes(32).toString('base64url');
-    const tokenHash = hashToken(token);
+    // Generate a cryptographically signed reset token that also hashes into the DB
     const expiry = new Date(Date.now() + RESET_EXPIRY_MS);
+    const token = createPasswordResetToken(user, expiry);
+    const tokenHash = hashToken(token);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
     const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
     const proto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '') || 'http';
     const origin = `${proto}://${host}`;
-    const resetUrl = `${origin}/reset-password?token=${token}`;
+    const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 
     return NextResponse.json({
       success: true,

@@ -181,16 +181,18 @@ export async function ensureDatabaseTables(client: PrismaClient): Promise<void> 
             // ignore if exists
           }
         }
-        // Auto-migrate schema updates for existing/cached database instances
+        // Auto-migrate schema updates for existing/cached database instances without triggering duplicate column errors
         try {
-          await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetToken" TEXT;');
+          const cols = await client.$queryRawUnsafe<Array<{ name: string }>>('PRAGMA table_info("User");');
+          const colNames = new Set(cols.map((c) => c.name));
+          if (!colNames.has('passwordResetToken')) {
+            await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetToken" TEXT;');
+          }
+          if (!colNames.has('passwordResetExpiry')) {
+            await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetExpiry" DATETIME;');
+          }
         } catch {
-          // column already exists
-        }
-        try {
-          await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetExpiry" DATETIME;');
-        } catch {
-          // column already exists
+          // ignore if table inspection is unsupported
         }
         console.log('[Database] Verified SQLite schema tables, columns, and indexes');
       } catch (err) {

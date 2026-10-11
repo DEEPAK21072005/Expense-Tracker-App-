@@ -27,7 +27,7 @@ export default function ReportsPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState('INR');
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 

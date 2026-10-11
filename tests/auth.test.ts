@@ -6,6 +6,7 @@ import {
   ResetPasswordSchema,
   ChangePasswordSchema,
 } from '../lib/validation';
+import { createPasswordResetToken, verifyPasswordResetToken } from '../lib/auth';
 
 describe('Auth Validation Schemas', () => {
   describe('RegisterInputSchema', () => {
@@ -202,5 +203,27 @@ describe('Session Token & Expiration Logic', () => {
     const tamperedSig = validSig.slice(0, -2) + '00';
 
     expect(validSig).not.toBe(tamperedSig);
+  });
+
+  it('creates and verifies signed password reset tokens accurately', () => {
+    const expiry = new Date(Date.now() + 60_000);
+    const token = createPasswordResetToken(
+      { id: 'usr_reset_1', email: 'deepak@example.com', name: 'Deepak Polisetti', baseCurrency: 'INR' },
+      expiry
+    );
+
+    const verified = verifyPasswordResetToken(token);
+    expect(verified).not.toBeNull();
+    expect(verified?.userId).toBe('usr_reset_1');
+    expect(verified?.email).toBe('deepak@example.com');
+    expect(verified?.name).toBe('Deepak Polisetti');
+    expect(verified?.baseCurrency).toBe('INR');
+
+    // Expired reset token returns null
+    const expiredToken = createPasswordResetToken(
+      { id: 'usr_reset_1', email: 'deepak@example.com', name: 'Deepak Polisetti', baseCurrency: 'INR' },
+      new Date(Date.now() - 10_000)
+    );
+    expect(verifyPasswordResetToken(expiredToken)).toBeNull();
   });
 });
