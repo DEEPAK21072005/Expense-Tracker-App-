@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         name: parsed.data.name,
         email,
         baseCurrency: parsed.data.baseCurrency,
-        passwordHash: await bcrypt.hash(parsed.data.password, 12),
+        passwordHash: await bcrypt.hash(parsed.data.password, 10),
         categories: {
           create: DEFAULT_CATEGORIES,
         },
@@ -53,8 +53,18 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true, data: publicUser(user) }, { status: 201 });
     await createSession(user, response);
     return response;
-  } catch (error) {
-    console.error('Registration failed', error);
-    return NextResponse.json({ success: false, error: 'Unable to create your account. Please try again.' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Registration failed:', error);
+    if (error?.code === 'P2002') {
+      return NextResponse.json(
+        { success: false, error: 'An account already exists with this email address. Please sign in instead.' },
+        { status: 409 }
+      );
+    }
+    const message = error instanceof Error ? error.message : 'Unable to create your account';
+    return NextResponse.json(
+      { success: false, error: process.env.NODE_ENV === 'development' ? message : 'Unable to create your account. Please try again.' },
+      { status: 500 }
+    );
   }
 }
