@@ -175,9 +175,24 @@ export async function ensureDatabaseTables(client: PrismaClient): Promise<void> 
     schemaInitPromise = (async () => {
       try {
         for (const sql of DDL_STATEMENTS) {
-          await client.$executeRawUnsafe(sql);
+          try {
+            await client.$executeRawUnsafe(sql);
+          } catch {
+            // ignore if exists
+          }
         }
-        console.log('[Database] Verified SQLite schema tables and indexes');
+        // Auto-migrate schema updates for existing/cached database instances
+        try {
+          await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetToken" TEXT;');
+        } catch {
+          // column already exists
+        }
+        try {
+          await client.$executeRawUnsafe('ALTER TABLE "User" ADD COLUMN "passwordResetExpiry" DATETIME;');
+        } catch {
+          // column already exists
+        }
+        console.log('[Database] Verified SQLite schema tables, columns, and indexes');
       } catch (err) {
         console.warn('[Database] Notice during schema ensure:', err);
       }

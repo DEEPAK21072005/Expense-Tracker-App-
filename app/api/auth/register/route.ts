@@ -61,9 +61,8 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: 'Unable to create your account. Please try again.', details: message },
+      { success: false, error: 'Unable to create your account. Please try again.' },
       { status: 500 }
     );
   }
